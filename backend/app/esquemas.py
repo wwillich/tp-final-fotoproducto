@@ -11,10 +11,12 @@ from fotoproducto import OpcionesEdicion
 # Deben coincidir con el core (claves de ADAPTADORES y de Compresor.perfiles); un test lo verifica.
 Adaptacion = Literal["bordes", "recortar"]
 Peso = Literal["liviano", "normal", "maxima"]
+Espacio = Literal["poco", "normal", "mucho"]
 
 
 CONTORNO_AYUDA = ("Opcional. Imagen PNG donde lo blanco es la zona que rodea el producto (el resto, transparente "
-                  "o negro). Si viene, el fondo se quita usando esa zona como guía; si no, se detecta solo.")
+                  "o negro). Sirve de guía para quitar el fondo o centrar; si no viene, el producto se detecta solo. "
+                  "Si viene sin pedir centrar ni quitar el fondo, se quita el fondo.")
 
 
 class PlataformaOut(BaseModel):
@@ -48,7 +50,10 @@ def opciones_desde_form(
     posicion_y: float = Form(0.5, ge=0, le=1, description="Al recortar: 0 conserva la parte de arriba, 1 la de abajo."),
     peso: Peso = Form("normal", description="Peso del archivo: liviano (hasta 200 KB), normal (hasta 500 KB) o maxima calidad."),
     quitar_fondo: bool = Form(False, description="Dejar el producto sobre fondo blanco."),
+    centrar: bool = Form(False, description="Centrar el producto en la foto (con o sin quitar el fondo)."),
+    espacio: Espacio = Form("normal", description="Espacio alrededor del producto al centrarlo."),
 ) -> OpcionesEdicion:
     """Dependencia que arma las opciones de edición a partir de los campos del formulario."""
     return OpcionesEdicion(plataforma=plataforma, adaptacion=adaptacion, posicion_x=posicion_x,
-                           posicion_y=posicion_y, peso=peso, quitar_fondo=quitar_fondo)
+                           posicion_y=posicion_y, peso=peso, quitar_fondo=quitar_fondo,
+                           centrar=centrar, espacio=espacio)

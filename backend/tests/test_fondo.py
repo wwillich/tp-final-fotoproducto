@@ -61,6 +61,12 @@ def test_contorno_invalido_si_no_encierra_nada_o_es_toda_la_foto(zona):
         QuitadorFondo().mascara(escena_ruidosa(), np.full((200, 200), zona, np.uint8))
 
 
+def test_un_producto_cerca_del_borde_de_la_foto_no_se_estira_hasta_el_borde():
+    mascara = QuitadorFondo().mascara(escena_ruidosa(caja=(10, 70, 130, 190)), contorno(caja=(8, 72, 128, 192)))
+    ys, xs = np.where(mascara > 0)
+    assert ys.min() >= 8 and xs.max() < 195   # el producto va de 10 a 70 y de 130 a 190
+
+
 def test_producto_no_encontrado_si_la_mascara_queda_casi_vacia():
     with pytest.raises(ProductoNoEncontrado):
         QuitadorFondo(area_minima=0.9).mascara(escena_ruidosa())

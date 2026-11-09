@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from fotoproducto.editor import EditorFotoProducto, OpcionesEdicion
-from fotoproducto.encuadre import ADAPTADORES
+from fotoproducto.encuadre import ADAPTADORES, ESPACIOS
 from fotoproducto.exceptions import ErrorFotoProducto
 from fotoproducto.imageio import read_photo
 
@@ -36,7 +36,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quitar-fondo", action="store_true",
                         help="deja el producto sobre fondo blanco (lo detecta solo)")
     parser.add_argument("--contorno", help="imagen con una zona clara que rodea el producto; "
-                                           "ayuda a quitar el fondo (implica --quitar-fondo)")
+                                           "guía para quitar el fondo o centrar (solo, quita el fondo)")
+    parser.add_argument("--centrar", action="store_true",
+                        help="centra el producto en la foto (con o sin --quitar-fondo)")
+    parser.add_argument("--espacio", choices=list(ESPACIOS), default="normal",
+                        help="espacio alrededor del producto al centrarlo (por defecto: normal)")
     args = parser.parse_args(argv)
 
     try:
@@ -44,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         contorno = read_photo(Path(args.contorno).read_bytes()).image if args.contorno else None
         opciones = OpcionesEdicion(plataforma=args.plataforma, adaptacion=args.adaptacion,
                                    posicion_x=args.posicion_x, posicion_y=args.posicion_y, peso=args.peso,
-                                   quitar_fondo=args.quitar_fondo)
+                                   quitar_fondo=args.quitar_fondo, centrar=args.centrar, espacio=args.espacio)
         resultado = editor.procesar(foto.image, opciones, contorno)
         Path(args.salida).write_bytes(resultado.contenido)
     except (ErrorFotoProducto, OSError) as exc:

@@ -42,7 +42,7 @@ const AYUDA_POSICION = {
 const state = {
   source: null,       // foto cargada: { name, url, file, width, height }
   plataformas: [],    // GET /api/plataformas
-  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal", quitar_fondo: false },
+  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal", quitar_fondo: false, centrar: false, espacio: "normal" },
   contorno: [],       // línea dibujada alrededor del producto: [[x, y], …] en píxeles de la foto (vacío = automático)
   preview: null,      // { url, ancho, alto, peso, calidad, avisos } de la última vista previa
   previewError: null, // ApiError de la última vista previa fallida
@@ -255,7 +255,8 @@ function schedulePreview(delay = 300) {
 async function buildForm(source, o) {
   const fd = new FormData();
   fd.append("archivo", source.file, source.name);
-  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso", "quitar_fondo"]) fd.append(campo, o[campo]);
+  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso", "quitar_fondo", "espacio"]) fd.append(campo, o[campo]);
+  fd.append("centrar", o.centrar);
   if (contornoListo() && source.width) fd.append("contorno", await exportarContorno(source), "contorno.png");
   return fd;
 }
@@ -325,7 +326,9 @@ function renderPhoto() {
 /* Quitar el fondo: automático, o con un contorno dibujado                   */
 /* ------------------------------------------------------------------------ */
 
-const contornoListo = () => state.options.quitar_fondo && state.contorno.length > 2;
+// El contorno ayuda a ubicar el producto: sirve tanto para quitar el fondo como para centrarlo.
+const usaProducto = () => state.options.quitar_fondo || state.options.centrar;
+const contornoListo = () => usaProducto() && state.contorno.length > 2;
 
 const anchoLinea = (w, h) => Math.max(2, Math.max(w, h) / 300);
 
@@ -428,7 +431,7 @@ function acercarASegmento(p, a, b) {
  */
 function crearCanvasContorno(source) {
   const canvas = el("canvas", {
-    id: "contorno-canvas", width: source.width, height: source.height, hidden: !state.options.quitar_fondo,
+    id: "contorno-canvas", width: source.width, height: source.height, hidden: !usaProducto(),
     "aria-label": "Zona para dibujar una línea alrededor del producto",
   });
   dibujarContorno(canvas);
@@ -536,15 +539,21 @@ function exportarContorno(source) {
 }
 
 function renderFondo() {
-  const activo = state.options.quitar_fondo;
-  $("#quitar-fondo").checked = activo;
+  const activo = usaProducto();
+  $("#quitar-fondo").checked = state.options.quitar_fondo;
+  $("#centrar").checked = state.options.centrar;
   $("#contorno-controles").hidden = !activo;
   $("#btn-borrar-contorno").disabled = !state.contorno.length;
   $("#contorno-aviso").textContent = state.contorno.length
     ? "Usamos tu contorno. Arrastrá un punto para corregirlo, tocá la línea para agregar uno o hacé doble clic en un punto para sacarlo."
-    : "Lo hicimos automáticamente. Si no quedó bien, dibujá una línea alrededor de tu producto, sobre la foto.";
+    : "Encontramos tu producto automáticamente. Si no quedó bien, dibujá una línea alrededor de tu producto, sobre la foto.";
   const canvas = $("#contorno-canvas");
   if (canvas) canvas.hidden = !activo;
+
+  $("#field-espacio").hidden = !state.options.centrar;
+  for (const b of document.querySelectorAll("#espacio button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.value === state.options.espacio));
+  }
 }
 
 function cambiarFondo(cambio) {
@@ -792,6 +801,10 @@ function bindEvents() {
   $("#btn-guardar").addEventListener("click", save);
 
   $("#quitar-fondo").addEventListener("change", (e) => cambiarFondo(() => { state.options.quitar_fondo = e.target.checked; }));
+  $("#centrar").addEventListener("change", (e) => cambiarFondo(() => { state.options.centrar = e.target.checked; }));
+  for (const b of document.querySelectorAll("#espacio button")) {
+    b.addEventListener("click", () => cambiarFondo(() => { state.options.espacio = b.dataset.value; }));
+  }
   $("#btn-borrar-contorno").addEventListener("click", () => cambiarFondo(() => { state.contorno = []; }));
 }
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from fotoproducto.compresion import Compresor
-from fotoproducto.encuadre import ADAPTADORES
+from fotoproducto.encuadre import ADAPTADORES, ESPACIOS, Centrador
 from fotoproducto.fondo import ComponedorFondoBlanco, QuitadorFondo
 from fotoproducto.plataformas import CatalogoPlataformas
 from fotoproducto.redimension import Redimensionador
@@ -21,6 +21,8 @@ class OpcionesEdicion:
     posicion_y: float = 0.5     # al recortar: 0 conserva la parte de arriba … 1 la de abajo
     peso: str = "normal"        # perfil de peso del Compresor: liviano, normal o maxima
     quitar_fondo: bool = False  # dejar el producto sobre fondo blanco
+    centrar: bool = False       # centrar el producto (con o sin quitar el fondo)
+    espacio: str = "normal"     # espacio alrededor al centrar: clave de ESPACIOS
 
 
 @dataclass
@@ -63,9 +65,14 @@ class EditorFotoProducto:
         plataforma = self.catalogo.obtener(opciones.plataforma)
         adaptador = ADAPTADORES[opciones.adaptacion](opciones.posicion_x, opciones.posicion_y)
 
-        if opciones.quitar_fondo or contorno is not None:
+        if opciones.quitar_fondo or opciones.centrar or contorno is not None:
+            # La máscara sirve para las dos cosas: saber dónde está el producto (centrar) y qué es fondo (quitarlo).
             mascara = self.quitador.mascara(imagen, contorno)
-            imagen = self.componedor.componer(imagen, mascara)
+            # Un contorno solo, sin pedir nada más, quita el fondo; si se pidió centrar, solo centra.
+            if opciones.quitar_fondo or not opciones.centrar:
+                imagen = self.componedor.componer(imagen, mascara)
+            if opciones.centrar:
+                imagen = Centrador(ESPACIOS[opciones.espacio]).centrar(imagen, mascara)
 
         imagen = adaptador.adaptar(imagen, plataforma.ancho, plataforma.alto)
         imagen, amplio = self.redimensionador.redimensionar(imagen, plataforma.ancho, plataforma.alto)

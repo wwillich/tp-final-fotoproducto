@@ -8,6 +8,33 @@ import numpy as np
 
 BLANCO = (255, 255, 255)
 
+# Espacio alrededor del producto al centrarlo, como fracción de su lado mayor (por cada lado).
+ESPACIOS: dict[str, float] = {"poco": 0.05, "normal": 0.15, "mucho": 0.3}
+
+
+class Centrador:
+    """Deja el producto en el centro de la foto, con un margen proporcional a su tamaño."""
+
+    def __init__(self, margen: float = ESPACIOS["normal"]) -> None:
+        self.margen = margen  # fracción del lado mayor del producto, a cada lado
+
+    def centrar(self, imagen: np.ndarray, mascara: np.ndarray) -> np.ndarray:
+        """Recorta alrededor del producto (la caja de la máscara) más el margen.
+
+        Si el margen se sale de la foto original, se completa con blanco: el producto nunca se corta.
+        """
+        ys, xs = np.where(mascara > 0)
+        if ys.size == 0:
+            return imagen
+        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        margen = round(self.margen * max(y1 - y0, x1 - x0))
+        y0, y1, x0, x1 = y0 - margen, y1 + margen, x0 - margen, x1 + margen
+        alto, ancho = imagen.shape[:2]
+        recorte = imagen[max(y0, 0):min(y1, alto), max(x0, 0):min(x1, ancho)]
+        return cv2.copyMakeBorder(
+            recorte, max(0, -y0), max(0, y1 - alto), max(0, -x0), max(0, x1 - ancho),
+            cv2.BORDER_CONSTANT, value=BLANCO,
+        )
 
 
 class Adaptador(ABC):

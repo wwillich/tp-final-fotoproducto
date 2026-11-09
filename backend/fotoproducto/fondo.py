@@ -114,8 +114,13 @@ class QuitadorFondo:
         """Rellena las muescas y redondea los dientes del borde: cierra, desenfoca y vuelve a binarizar."""
         lado = max(mascara.shape)
         cierre = _impar(round(self.cierre_borde * lado))
+        # Con fondo negro alrededor: sin ese marco, cerrar arrastra el producto hasta el borde de la foto
+        # (la erosión no cuenta lo que está fuera de la imagen).
+        marco = cierre
+        mascara = cv2.copyMakeBorder(mascara, marco, marco, marco, marco, cv2.BORDER_CONSTANT, value=0)
         mascara = cv2.morphologyEx(mascara, cv2.MORPH_CLOSE,
                                    cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (cierre, cierre)))
+        mascara = mascara[marco:-marco, marco:-marco]
         k = _impar(round(self.suavizado_borde * lado))
         suave = cv2.GaussianBlur(mascara, (k, k), 0)
         return np.where(suave > 127, 255, 0).astype(np.uint8)

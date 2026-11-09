@@ -76,7 +76,19 @@
         <h3 class="step">Quitar el fondo <span class="optional">(opcional)</span></h3>
         <div class="field field-check">
           <label for="quitar-fondo"><input type="checkbox" id="quitar-fondo"> Quitar el fondo de la foto</label>
-          <div class="help">Lo hacemos automáticamente. Si no acierta, podés marcar el contorno de tu producto.</div>
+          <div class="help">Deja todo lo que no es tu producto en blanco.</div>
+        </div>
+        <div class="field field-check">
+          <label for="centrar"><input type="checkbox" id="centrar"> Centrar el producto</label>
+          <div class="help">Deja el producto en el medio de la foto, con aire alrededor.</div>
+        </div>
+        <div class="field" id="field-espacio" hidden>
+          <label>Espacio alrededor</label>
+          <div class="segmented" role="group" aria-label="Espacio alrededor" id="espacio">
+            <button type="button" data-value="poco">Poco</button>
+            <button type="button" data-value="normal">Normal</button>
+            <button type="button" data-value="mucho">Mucho</button>
+          </div>
         </div>
         <div class="fields" id="contorno-controles" hidden>
           <div class="notice" id="contorno-aviso"></div>

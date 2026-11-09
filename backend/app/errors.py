@@ -25,6 +25,13 @@ class ApiError(Exception):
         self.message = message
 
 
+class TrabajoNoEncontrado(ApiError):
+    """No hay un trabajo guardado con ese id."""
+
+    def __init__(self, id: str) -> None:
+        super().__init__(404, "TRABAJO_NO_ENCONTRADO", f"No existe un trabajo guardado con id {id!r}.")
+
+
 # Excepciones del core → (estado HTTP, código). Las subclases heredan la entrada de su padre.
 CORE_ERRORS: dict[type[ErrorFotoProducto], tuple[int, str]] = {
     InvalidImage: (400, "INVALID_FILE"),

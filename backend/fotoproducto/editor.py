@@ -2,20 +2,12 @@
 
 from dataclasses import dataclass, field
 
-import cv2
 import numpy as np
 
+from fotoproducto.compresion import Compresor
 from fotoproducto.encuadre import ADAPTADORES
-from fotoproducto.exceptions import ErrorFotoProducto
 from fotoproducto.plataformas import CatalogoPlataformas
 from fotoproducto.redimension import Redimensionador
-
-# Codificación provisoria con calidad fija; F2 la reemplaza por el Compresor con perfiles de peso.
-CALIDAD_FIJA = 90
-CODIFICACION = {
-    "JPEG": (".jpg", "image/jpeg", [cv2.IMWRITE_JPEG_QUALITY, CALIDAD_FIJA]),
-    "WEBP": (".webp", "image/webp", [cv2.IMWRITE_WEBP_QUALITY, CALIDAD_FIJA]),
-}
 
 
 @dataclass
@@ -26,6 +18,7 @@ class OpcionesEdicion:
     adaptacion: str = "bordes"  # clave de ADAPTADORES
     posicion_x: float = 0.5     # al recortar: 0 conserva la izquierda … 1 la derecha
     posicion_y: float = 0.5     # al recortar: 0 conserva la parte de arriba … 1 la de abajo
+    peso: str = "normal"        # perfil de peso del Compresor: liviano, normal o maxima
 
 
 @dataclass
@@ -35,10 +28,11 @@ class ResultadoEdicion:
     contenido: bytes
     formato: str
     tipo_mime: str
+    extension: str              # con punto: ".jpg", ".webp"…
     ancho: int
     alto: int
     peso_bytes: int
-    calidad: str | None = None  # etiqueta de calidad: la calcula el Compresor (F2)
+    calidad: str                # etiqueta: excelente, muy buena, buena o aceptable
     avisos: list[str] = field(default_factory=list)
 
 
@@ -46,12 +40,14 @@ class EditorFotoProducto:
     """Aplica las etapas de edición a una foto y devuelve el resultado listo para publicar."""
 
     def __init__(self, catalogo: CatalogoPlataformas | None = None,
-                 redimensionador: Redimensionador | None = None) -> None:
+                 redimensionador: Redimensionador | None = None,
+                 compresor: Compresor | None = None) -> None:
         self.catalogo = catalogo or CatalogoPlataformas()
         self.redimensionador = redimensionador or Redimensionador()
+        self.compresor = compresor or Compresor()
 
     def procesar(self, imagen: np.ndarray, opciones: OpcionesEdicion) -> ResultadoEdicion:
-        """Adapta a la proporción de la plataforma, cambia al tamaño exacto y codifica."""
+        """Adapta a la proporción de la plataforma, cambia al tamaño exacto y comprime."""
         plataforma = self.catalogo.obtener(opciones.plataforma)
         adaptador = ADAPTADORES[opciones.adaptacion](opciones.posicion_x, opciones.posicion_y)
 
@@ -62,12 +58,11 @@ class EditorFotoProducto:
         if amplio:
             avisos.append(f"Tu foto es más chica de lo que pide {plataforma.nombre}. Puede verse un poco borrosa.")
 
-        extension, tipo_mime, parametros = CODIFICACION[plataforma.formato]
-        ok, buffer = cv2.imencode(extension, imagen, parametros)
-        if not ok:
-            raise ErrorFotoProducto("No se pudo guardar la imagen en el formato pedido.")
-        contenido = buffer.tobytes()
+        comprimida = self.compresor.comprimir(imagen, plataforma.formato, opciones.peso)
+        if comprimida.aviso:
+            avisos.append(comprimida.aviso)
         return ResultadoEdicion(
-            contenido=contenido, formato=plataforma.formato, tipo_mime=tipo_mime,
-            ancho=plataforma.ancho, alto=plataforma.alto, peso_bytes=len(contenido), avisos=avisos,
+            contenido=comprimida.contenido, formato=plataforma.formato, tipo_mime=comprimida.tipo_mime,
+            extension=comprimida.extension, ancho=plataforma.ancho, alto=plataforma.alto,
+            peso_bytes=len(comprimida.contenido), calidad=comprimida.etiqueta, avisos=avisos,
         )

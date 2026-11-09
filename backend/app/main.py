@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import FRONTEND_DIR, MEDIA_URL, STORAGE_DIR
 from app.errors import register_exception_handlers
-from app.routers import plataformas, vista_previa
+from app.routers import plataformas, trabajos, vista_previa
 
 
 @asynccontextmanager
@@ -42,6 +42,7 @@ register_exception_handlers(app)
 
 app.include_router(plataformas.router)
 app.include_router(vista_previa.router)
+app.include_router(trabajos.router)
 
 
 # Archivos guardados en disco (originales y resultados).

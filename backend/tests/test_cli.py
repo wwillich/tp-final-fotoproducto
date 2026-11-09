@@ -17,8 +17,9 @@ def test_cli_genera_el_archivo(tmp_path):
     entrada, salida = tmp_path / "in.png", tmp_path / "out.jpg"
     entrada.write_bytes(foto_bytes(800, 600))
     r = correr(entrada, salida, "--plataforma", "instagram_vertical", "--adaptacion", "recortar",
-               "--posicion-x", "0", "--posicion-y", "1")
+               "--posicion-x", "0", "--posicion-y", "1", "--peso", "liviano")
     assert r.returncode == 0, r.stderr
+    assert "calidad" in r.stdout
     assert cv2.imread(str(salida)).shape[:2] == (1350, 1080)
 
 

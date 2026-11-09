@@ -7,7 +7,8 @@ from urllib.parse import unquote
 import cv2
 import numpy as np
 
-from app.esquemas import Adaptacion
+from app.core import editor
+from app.esquemas import Adaptacion, Peso
 from conftest import foto_bytes
 from fotoproducto.encuadre import ADAPTADORES
 
@@ -18,6 +19,7 @@ def vista_previa(client, contenido: bytes, nombre="foto.png", **datos):
 
 def test_contrato_coincide_con_el_core():
     assert set(get_args(Adaptacion)) == set(ADAPTADORES)
+    assert set(get_args(Peso)) == set(editor.compresor.perfiles)
 
 
 def test_plataformas(client):
@@ -36,6 +38,7 @@ def test_vista_previa_devuelve_la_imagen_y_los_datos_en_headers(client):
     assert img.shape[:2] == (1200, 1200)
     assert r.headers["x-ancho"] == "1200" and r.headers["x-alto"] == "1200"
     assert int(r.headers["x-peso-bytes"]) == len(r.content)
+    assert r.headers["x-calidad"] in {"excelente", "muy%20buena", "buena", "aceptable"}
     assert "más chica" in json.loads(unquote(r.headers["x-avisos"]))[0]
 
 

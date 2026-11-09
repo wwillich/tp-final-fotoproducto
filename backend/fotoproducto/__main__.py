@@ -31,12 +31,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="al recortar, de 0 (conserva la izquierda) a 1 (la derecha); por defecto 0.5")
     parser.add_argument("--posicion-y", type=fraccion, default=0.5,
                         help="al recortar, de 0 (conserva la parte de arriba) a 1 (la de abajo); por defecto 0.5")
+    parser.add_argument("--peso", choices=list(editor.compresor.perfiles), default="normal",
+                        help="peso del archivo: liviano (hasta 200 KB), normal (hasta 500 KB) o maxima calidad (por defecto: normal)")
     args = parser.parse_args(argv)
 
     try:
         foto = read_photo(Path(args.entrada).read_bytes())
         opciones = OpcionesEdicion(plataforma=args.plataforma, adaptacion=args.adaptacion,
-                                   posicion_x=args.posicion_x, posicion_y=args.posicion_y)
+                                   posicion_x=args.posicion_x, posicion_y=args.posicion_y, peso=args.peso)
         resultado = editor.procesar(foto.image, opciones)
         Path(args.salida).write_bytes(resultado.contenido)
     except (ErrorFotoProducto, OSError) as exc:
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     for aviso in resultado.avisos:
         print(f"Aviso: {aviso}", file=sys.stderr)
     print(f"Guardado en {args.salida}: {resultado.ancho} × {resultado.alto} · "
-          f"{resultado.formato} · {resultado.peso_bytes // 1024} KB")
+          f"{resultado.formato} · {resultado.peso_bytes // 1024} KB · calidad {resultado.calidad}")
     return 0
 
 

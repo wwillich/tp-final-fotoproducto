@@ -38,9 +38,7 @@
         <span>Arrastrala acá o hacé clic · PNG, JPG, WEBP o BMP · máx. 10 MB</span>
       </label>
 
-      <div class="gallery" id="gallery" aria-live="polite">
-        <div class="notice">Todavía no guardaste ninguna foto.</div>
-      </div>
+      <div class="gallery" id="gallery" aria-live="polite"></div>
     </aside>
 
     <!-- Centro: tu foto vs. cómo va a quedar -->
@@ -99,6 +97,19 @@
           <div class="range-ends"><span>Arriba</span><span>Abajo</span></div>
           <div class="help" id="posicion-help"></div>
         </div>
+        <div class="field">
+          <label>Peso del archivo</label>
+          <div class="segmented" role="group" aria-label="Peso del archivo" id="peso">
+            <button type="button" data-value="liviano">Liviano</button>
+            <button type="button" data-value="normal">Normal</button>
+            <button type="button" data-value="maxima">Máxima calidad</button>
+          </div>
+          <div class="help" id="peso-help"></div>
+        </div>
+
+        <h3 class="step">Guardar y descargar</h3>
+        <button type="button" class="btn btn-primary" id="btn-guardar" disabled>Guardar y descargar</button>
+        <div class="help">Se guarda en "Tus fotos" y se descarga al instante.</div>
       </div>
     </aside>
   </main>

@@ -27,6 +27,11 @@ const ADAPTACIONES = {
   bordes: "Completa con blanco para que no se corte nada.",
   recortar: "Corta lo que sobra para llenar todo el formato.",
 };
+const PESOS = {
+  liviano: "Pesa poco y carga más rápido. Puede perder un poco de detalle.",
+  normal: "Un buen equilibrio entre calidad y peso.",
+  maxima: "La mejor calidad posible. El archivo pesa más.",
+};
 // Qué decir debajo de "¿Qué parte mostrar?" según de qué lado sobra foto.
 const AYUDA_POSICION = {
   horizontal: "Con esta foto y este formato solo se puede mover de izquierda a derecha.",
@@ -37,10 +42,14 @@ const AYUDA_POSICION = {
 const state = {
   source: null,       // foto cargada: { name, url, file, width, height }
   plataformas: [],    // GET /api/plataformas
-  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5 },
-  preview: null,      // { url, ancho, alto, peso, avisos } de la última vista previa
+  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal" },
+  preview: null,      // { url, ancho, alto, peso, calidad, avisos } de la última vista previa
   previewError: null, // ApiError de la última vista previa fallida
-  busy: false,
+  busy: false,        // hay una vista previa en camino
+  saving: false,      // se está guardando el trabajo
+  trabajos: [],       // GET /api/trabajos
+  galleryError: null, // ApiError si falló el listado
+  viewing: null,      // trabajo guardado que se está mirando en el centro (solo lectura)
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -181,7 +190,9 @@ function uploadFile(file) {
   setSource({ name: file.name, url: URL.createObjectURL(file), file });
   previewSeq++;  // la respuesta pendiente (si la hay) era de la foto anterior
   state.busy = false;
+  state.viewing = null;
   setPreview(null, null);
+  renderGallery();
   renderPhoto();
   renderOptions();
   renderResult();
@@ -220,25 +231,31 @@ function setPreview(preview, error) {
 function schedulePreview(delay = 300) {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(runPreview, delay);
+  if (state.viewing) {  // cambiar una opción es volver a editar la foto propia
+    state.viewing = null;
+    renderPhoto();
+    renderResult();
+    renderGallery();
+  }
+}
+
+/** Formulario que entienden /api/vista-previa y /api/trabajos: la foto y todas las opciones. */
+function buildForm(source, o) {
+  const fd = new FormData();
+  fd.append("archivo", source.file, source.name);
+  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso"]) fd.append(campo, o[campo]);
+  return fd;
 }
 
 async function runPreview() {
   const source = state.source;
-  const o = state.options;
-  if (!source || !o.plataforma) return;
+  if (!source || !state.options.plataforma) return;
 
   const seq = ++previewSeq;
-  const fd = new FormData();
-  fd.append("archivo", source.file, source.name);
-  fd.append("plataforma", o.plataforma);
-  fd.append("adaptacion", o.adaptacion);
-  fd.append("posicion_x", o.posicion_x);
-  fd.append("posicion_y", o.posicion_y);
-
   state.busy = true;
   renderResult();
   try {
-    const r = await api("POST", "/api/vista-previa", { formData: fd, raw: true });
+    const r = await api("POST", "/api/vista-previa", { formData: buildForm(source, state.options), raw: true });
     const blob = await r.blob();
     if (seq !== previewSeq) return;
     setPreview({
@@ -246,6 +263,7 @@ async function runPreview() {
       ancho: Number(r.headers.get("X-Ancho")),
       alto: Number(r.headers.get("X-Alto")),
       peso: Number(r.headers.get("X-Peso-Bytes")),
+      calidad: decodeURIComponent(r.headers.get("X-Calidad") || ""),
       avisos: JSON.parse(decodeURIComponent(r.headers.get("X-Avisos") || "[]")),
     }, null);
   } catch (err) {
@@ -263,9 +281,20 @@ async function runPreview() {
 /* Vista                                                                     */
 /* ------------------------------------------------------------------------ */
 
+const absoluteUrl = (url) => (/^(https?:|blob:|data:)/.test(url) ? url : API_BASE + url);
+const formatBytes = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const resultLine = (peso, calidad, ancho, alto) => `Pesa ${formatBytes(peso)} · Calidad: ${calidad} · ${ancho} × ${alto}`;
+const avisosNodes = (avisos) => avisos.map((texto) => el("div", { class: "notice notice-warn" }, texto));
+
 function renderPhoto() {
   const frame = $("#photo-frame");
+  const v = state.viewing;
   const source = state.source;
+  if (v) {
+    $("#photo-meta").textContent = v.nombre_original;
+    frame.replaceChildren(el("img", { src: absoluteUrl(v.url_original), alt: v.nombre_original }));
+    return;
+  }
   $("#photo-meta").textContent = source
     ? [source.width ? `${source.width} × ${source.height}` : null, source.name].filter(Boolean).join(" · ")
     : "";
@@ -274,17 +303,32 @@ function renderPhoto() {
     : el("div", { class: "empty" }, "Subí una foto para empezar"));
 }
 
-const formatBytes = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+function renderSaveButton() {
+  const button = $("#btn-guardar");
+  button.disabled = !state.preview || state.busy || state.saving || Boolean(state.viewing);
+  button.textContent = state.saving ? "Guardando…" : "Guardar y descargar";
+}
 
 function renderResult() {
   const frame = $("#result-frame");
-  const { preview, previewError: error } = state;
+  const { preview, previewError: error, viewing: v } = state;
+  renderSaveButton();
+
+  if (v) {  // mirando un trabajo guardado: solo lectura
+    frame.classList.remove("loading");
+    $("#result-meta").textContent = resultLine(v.peso_bytes, v.calidad, v.ancho, v.alto);
+    $("#result-avisos").replaceChildren(
+      el("div", { class: "notice" }, "Estás viendo una foto guardada. ",
+        el("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: closeView },
+          state.source ? "Volver a mi foto" : "Cerrar")),
+      ...avisosNodes(v.avisos));
+    frame.replaceChildren(el("img", { src: absoluteUrl(v.url), alt: `Foto guardada: ${v.nombre_original}` }));
+    return;
+  }
+
   frame.classList.toggle("loading", state.busy);
-  $("#result-meta").textContent = preview
-    ? `${preview.ancho} × ${preview.alto} · ${formatBytes(preview.peso)}`
-    : "";
-  $("#result-avisos").replaceChildren(
-    ...(preview?.avisos ?? []).map((texto) => el("div", { class: "notice notice-warn" }, texto)));
+  $("#result-meta").textContent = preview ? resultLine(preview.peso, preview.calidad, preview.ancho, preview.alto) : "";
+  $("#result-avisos").replaceChildren(...avisosNodes(preview?.avisos ?? []));
 
   if (error) {
     frame.replaceChildren(el("div", { class: "problem", role: "alert" },
@@ -319,6 +363,10 @@ function renderOptions() {
     b.setAttribute("aria-pressed", String(b.dataset.value === o.adaptacion));
   }
   $("#adaptacion-help").textContent = ADAPTACIONES[o.adaptacion];
+  for (const b of document.querySelectorAll("#peso button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.value === o.peso));
+  }
+  $("#peso-help").textContent = PESOS[o.peso];
 
   const eje = ejeRecorte();
   $("#field-posicion").hidden = o.adaptacion !== "recortar";
@@ -341,6 +389,116 @@ async function loadPlataformas() {
   state.options.plataforma = state.plataformas[0]?.clave ?? null;
   renderOptions();
   schedulePreview(0);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Guardado y galería                                                        */
+/* ------------------------------------------------------------------------ */
+
+const formatDate = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+};
+
+/** Descarga el resultado de un trabajo guardado. */
+function download(trabajo) {
+  const base = trabajo.nombre_original.replace(/\.[^.]+$/, "") || "foto";
+  const ext = trabajo.url.split(".").pop();
+  const a = el("a", { href: absoluteUrl(trabajo.url), download: `${base}-${trabajo.plataforma}.${ext}` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
+async function save() {
+  const source = state.source;
+  if (!source || state.saving) return;
+  state.saving = true;
+  renderSaveButton();
+  try {
+    const trabajo = await api("POST", "/api/trabajos", { formData: buildForm(source, state.options) });
+    download(trabajo);
+    toast("ok", "Foto guardada", "Quedó en tu galería y se descargó.");
+    await loadGallery();
+  } catch (err) {
+    toastError(err);
+  } finally {
+    state.saving = false;
+    renderSaveButton();
+  }
+}
+
+async function loadGallery() {
+  try {
+    state.trabajos = await api("GET", "/api/trabajos");
+    state.galleryError = null;
+  } catch (err) {
+    state.trabajos = [];
+    state.galleryError = err;
+  }
+  renderGallery();
+}
+
+function renderGallery() {
+  const gallery = $("#gallery");
+  if (state.galleryError) {
+    gallery.replaceChildren(el("div", { class: "notice notice-err" },
+      el("strong", {}, state.galleryError.title + ". "), state.galleryError.message));
+    return;
+  }
+  if (!state.trabajos.length) {
+    gallery.replaceChildren(el("div", { class: "notice" }, "Todavía no guardaste ninguna foto."));
+    return;
+  }
+  gallery.replaceChildren(...state.trabajos.map((t) => {
+    const plataforma = state.plataformas.find((p) => p.clave === t.plataforma)?.nombre ?? t.plataforma;
+    return el("div", {
+      class: `item${state.viewing?.id === t.id ? " active" : ""}`, role: "button", tabindex: "0",
+      title: `${t.nombre_original} · ${formatDate(t.creado)}`,
+      onclick: () => view(t),
+      onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); view(t); } },
+    },
+      el("img", { class: "item-thumb", src: absoluteUrl(t.url), alt: "", loading: "lazy" }),
+      el("div", { class: "item-info" },
+        el("div", { class: "item-name" }, t.nombre_original),
+        el("div", { class: "item-detail" }, `${plataforma} · ${formatBytes(t.peso_bytes)}`)),
+      el("div", { class: "item-actions" },
+        el("button", {
+          type: "button", class: "item-btn", title: "Descargar", "aria-label": `Descargar ${t.nombre_original}`,
+          onclick: (e) => { e.stopPropagation(); download(t); },
+        }, "↓"),
+        el("button", {
+          type: "button", class: "item-btn item-delete", title: "Borrar", "aria-label": `Borrar ${t.nombre_original}`,
+          onclick: (e) => { e.stopPropagation(); remove(t); },
+        }, "×")),
+    );
+  }));
+}
+
+/** Muestra un trabajo guardado en el centro (original y resultado), sin tocar la foto que se está editando. */
+function view(trabajo) {
+  state.viewing = trabajo;
+  renderPhoto();
+  renderResult();
+  renderGallery();
+}
+
+function closeView() {
+  state.viewing = null;
+  renderPhoto();
+  renderResult();
+  renderGallery();
+}
+
+async function remove(trabajo) {
+  try {
+    await api("DELETE", `/api/trabajos/${encodeURIComponent(trabajo.id)}`);
+    toast("ok", "Foto borrada", trabajo.nombre_original);
+    if (state.viewing?.id === trabajo.id) closeView();
+    await loadGallery();
+  } catch (err) {
+    toastError(err);
+  }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -369,13 +527,16 @@ function bindEvents() {
       schedulePreview();
     });
   }
-  for (const b of document.querySelectorAll("#adaptacion button")) {
-    b.addEventListener("click", () => {
-      state.options.adaptacion = b.dataset.value;
-      renderOptions();
-      schedulePreview();
-    });
+  for (const campo of ["adaptacion", "peso"]) {
+    for (const b of document.querySelectorAll(`#${campo} button`)) {
+      b.addEventListener("click", () => {
+        state.options[campo] = b.dataset.value;
+        renderOptions();
+        schedulePreview();
+      });
+    }
   }
+  $("#btn-guardar").addEventListener("click", save);
 }
 
 function init() {
@@ -384,7 +545,7 @@ function init() {
   renderOptions();
   bindEvents();
   checkServer();
-  loadPlataformas();
+  loadPlataformas().then(loadGallery);  // la galería usa los nombres de las plataformas
 }
 
 init();

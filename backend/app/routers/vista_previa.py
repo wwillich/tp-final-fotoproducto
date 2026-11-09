@@ -1,28 +1,24 @@
 import json
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, Response, UploadFile
-from starlette.concurrency import run_in_threadpool
+from fastapi import APIRouter, Depends, File, Response, UploadFile
 
-from app.core import editor
-from app.esquemas import Adaptacion
-from app.uploads import read_upload
+from app.core import procesar_subida
+from app.esquemas import opciones_desde_form
 from fotoproducto import OpcionesEdicion, ResultadoEdicion
 
 router = APIRouter(prefix="/api", tags=["vista previa"])
 
 
 def encabezados(resultado: ResultadoEdicion) -> dict[str, str]:
-    """Datos del resultado como headers (ASCII: los avisos van como JSON codificado en URL)."""
-    headers = {
+    """Datos del resultado como headers (ASCII: calidad y avisos van codificados en URL)."""
+    return {
         "X-Ancho": str(resultado.ancho),
         "X-Alto": str(resultado.alto),
         "X-Peso-Bytes": str(resultado.peso_bytes),
+        "X-Calidad": quote(resultado.calidad),
         "X-Avisos": quote(json.dumps(resultado.avisos)),
     }
-    if resultado.calidad:
-        headers["X-Calidad"] = quote(resultado.calidad)
-    return headers
 
 
 @router.post(
@@ -33,13 +29,7 @@ def encabezados(resultado: ResultadoEdicion) -> dict[str, str]:
 )
 async def vista_previa(
     archivo: UploadFile = File(..., description="La foto original."),
-    plataforma: str = Form(..., description="Clave de la plataforma (ver GET /api/plataformas)."),
-    adaptacion: Adaptacion = Form("bordes", description="Qué hacer si la foto no entra en el formato."),
-    posicion_x: float = Form(0.5, ge=0, le=1, description="Al recortar: 0 conserva la izquierda, 1 la derecha."),
-    posicion_y: float = Form(0.5, ge=0, le=1, description="Al recortar: 0 conserva la parte de arriba, 1 la de abajo."),
+    opciones: OpcionesEdicion = Depends(opciones_desde_form),
 ):
-    subida = await read_upload(archivo)
-    opciones = OpcionesEdicion(plataforma=plataforma, adaptacion=adaptacion,
-                               posicion_x=posicion_x, posicion_y=posicion_y)
-    resultado = await run_in_threadpool(editor.procesar, subida.photo.image, opciones)
+    _, resultado = await procesar_subida(archivo, opciones)
     return Response(resultado.contenido, media_type=resultado.tipo_mime, headers=encabezados(resultado))

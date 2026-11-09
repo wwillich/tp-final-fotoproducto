@@ -1,0 +1,17 @@
+# Solo se sube el README.md de la raíz: cualquier otro .md queda ignorado
+# (incluye CLAUDE.md, notas y planes en cualquier carpeta).
+*.md
+!/README.md
+
+# Herramientas locales
+.claude/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Trabajos guardados
+backend/storage/*
+!backend/storage/.gitkeep

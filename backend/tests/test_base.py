@@ -25,6 +25,12 @@ def test_frontend_servido(client):
     assert "Tu foto" in r.text
 
 
+def test_el_frontend_se_revalida_en_cada_carga(client):
+    for ruta in ("/", "/app.js", "/styles.css"):
+        assert client.get(ruta).headers["cache-control"] == "no-cache"
+    assert "cache-control" not in client.get("/api/health").headers
+
+
 def test_core_no_importa_la_web():
     """Importar fotoproducto no debe cargar fastapi, starlette ni app."""
     code = (

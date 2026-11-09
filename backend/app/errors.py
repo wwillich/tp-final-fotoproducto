@@ -12,7 +12,9 @@ manejadores responden.
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from fotoproducto import ErrorFotoProducto, InvalidImage, PlataformaDesconocida
+from fotoproducto import (
+    ErrorFotoProducto, InvalidImage, MarcasInsuficientes, PlataformaDesconocida, ProductoNoEncontrado,
+)
 
 
 class ApiError(Exception):
@@ -36,6 +38,8 @@ class TrabajoNoEncontrado(ApiError):
 CORE_ERRORS: dict[type[ErrorFotoProducto], tuple[int, str]] = {
     InvalidImage: (400, "INVALID_FILE"),
     PlataformaDesconocida: (422, "PLATAFORMA_DESCONOCIDA"),
+    MarcasInsuficientes: (422, "MARCAS_INSUFICIENTES"),
+    ProductoNoEncontrado: (422, "PRODUCTO_NO_ENCONTRADO"),
     ErrorFotoProducto: (400, "ERROR_FOTOPRODUCTO"),
 }
 

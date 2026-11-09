@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, Response, UploadFile
 
 from app.core import procesar_subida, repositorio
-from app.esquemas import TrabajoOut, opciones_desde_form
+from app.esquemas import MARCAS_AYUDA, TrabajoOut, opciones_desde_form
 from fotoproducto import OpcionesEdicion
 
 router = APIRouter(prefix="/api/trabajos", tags=["trabajos"])
@@ -10,9 +10,10 @@ router = APIRouter(prefix="/api/trabajos", tags=["trabajos"])
 @router.post("", status_code=201, response_model=TrabajoOut, summary="Procesa la foto y guarda el trabajo")
 async def crear_trabajo(
     archivo: UploadFile = File(..., description="La foto original."),
+    marcas: UploadFile | None = File(None, description=MARCAS_AYUDA),
     opciones: OpcionesEdicion = Depends(opciones_desde_form),
 ):
-    subida, resultado = await procesar_subida(archivo, opciones)
+    subida, resultado = await procesar_subida(archivo, opciones, marcas)
     return repositorio.guardar(subida, resultado, opciones)
 
 

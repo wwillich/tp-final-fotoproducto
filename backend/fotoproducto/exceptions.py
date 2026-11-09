@@ -17,3 +17,11 @@ class InvalidImage(ErrorFotoProducto):
 
 class PlataformaDesconocida(ErrorFotoProducto):
     """La clave de plataforma pedida no está en el catálogo."""
+
+
+class MarcasInsuficientes(ErrorFotoProducto):
+    """Falta marcar el producto, el fondo, o las dos cosas."""
+
+
+class ProductoNoEncontrado(ErrorFotoProducto):
+    """Con las marcas dadas la separación dejó una máscara vacía o casi vacía."""

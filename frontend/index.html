@@ -73,6 +73,30 @@
         <h2 id="opciones-title">Opciones</h2>
       </div>
       <div class="fields">
+        <h3 class="step">Quitar el fondo <span class="optional">(opcional)</span></h3>
+        <div class="field field-check">
+          <label for="quitar-fondo"><input type="checkbox" id="quitar-fondo"> Quitar el fondo de la foto</label>
+          <div class="help">Pintá en verde sobre tu producto y en rojo sobre lo que querés sacar. No hace falta ser prolijo.</div>
+        </div>
+        <div class="fields" id="marcas-controles" hidden>
+          <div class="field">
+            <label>Pincel</label>
+            <div class="segmented" role="group" aria-label="Pincel" id="pincel">
+              <button type="button" data-value="producto" class="swatch swatch-producto">Producto</button>
+              <button type="button" data-value="fondo" class="swatch swatch-fondo">Fondo</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="pincel-tam">Tamaño del pincel</label>
+            <input type="range" id="pincel-tam" min="3" max="60" step="1" value="20">
+          </div>
+          <div class="marcas-acciones">
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-deshacer">Deshacer</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-borrar-marcas">Borrar marcas</button>
+          </div>
+          <div class="notice" id="marcas-aviso">Marcá al menos una parte del producto (verde) y una del fondo (rojo).</div>
+        </div>
+
         <h3 class="step">¿Dónde vas a publicar?</h3>
         <div class="field">
           <label for="plataforma">Plataforma</label>

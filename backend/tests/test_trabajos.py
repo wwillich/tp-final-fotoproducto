@@ -85,6 +85,32 @@ def test_un_archivo_invalido_no_guarda_nada(client):
     assert not any(STORAGE_DIR.iterdir())
 
 
+def test_crear_con_marcas_guarda_el_resultado_sin_fondo(client):
+    import cv2
+    import numpy as np
+
+    from conftest import escena, marcas, png_bytes
+
+    r = client.post("/api/trabajos", data={"plataforma": "mercadolibre", "peso": "maxima"}, files={
+        "archivo": ("p.png", png_bytes(escena()), "image/png"),
+        "marcas": ("m.png", png_bytes(marcas()), "image/png"),
+    })
+    assert r.status_code == 201
+    guardado = cv2.imdecode(np.frombuffer(client.get(r.json()["url"]).content, np.uint8), cv2.IMREAD_COLOR)
+    assert guardado[10:60, 10:60].min() > 245
+    assert client.get(r.json()["url_original"]).content == png_bytes(escena())  # el original no se toca
+
+
+def test_marcas_incompletas_no_guardan_nada(client):
+    from conftest import escena, marcas, png_bytes
+
+    r = client.post("/api/trabajos", data={"plataforma": "mercadolibre"}, files={
+        "archivo": ("p.png", png_bytes(escena()), "image/png"),
+        "marcas": ("m.png", png_bytes(marcas(producto=False)), "image/png"),
+    })
+    assert r.status_code == 422 and not any(STORAGE_DIR.iterdir())
+
+
 def test_peso_invalido_da_422(client):
     assert crear(client, peso="pesadisimo").status_code == 422
 

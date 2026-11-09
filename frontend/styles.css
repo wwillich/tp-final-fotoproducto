@@ -233,6 +233,15 @@ code { font-family: var(--mono); font-size: 12px; }
 /* ---------- Options ---------- */
 
 .fields { display: flex; flex-direction: column; gap: 14px; }
+.optional { font-weight: 400; font-size: 12px; color: var(--muted); }
+.swatch::before {
+  content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  margin-right: 6px; background: var(--swatch);
+}
+.swatch-producto { --swatch: #00c000; }
+.swatch-fondo { --swatch: #e03131; }
+.marcas-acciones { display: flex; gap: 8px; }
+#marcas-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .6; cursor: crosshair; touch-action: none; }
 .range-ends + input[type="range"] { margin-top: 12px; }
 .field input[type="range"]:disabled { opacity: .4; }
 .range-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }

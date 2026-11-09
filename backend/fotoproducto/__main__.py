@@ -33,13 +33,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="al recortar, de 0 (conserva la parte de arriba) a 1 (la de abajo); por defecto 0.5")
     parser.add_argument("--peso", choices=list(editor.compresor.perfiles), default="normal",
                         help="peso del archivo: liviano (hasta 200 KB), normal (hasta 500 KB) o maxima calidad (por defecto: normal)")
+    parser.add_argument("--marcas", help="imagen PNG con trazos verdes sobre el producto y rojos sobre el fondo, "
+                                         "para quitar el fondo")
     args = parser.parse_args(argv)
 
     try:
         foto = read_photo(Path(args.entrada).read_bytes())
+        marcas = read_photo(Path(args.marcas).read_bytes()).image if args.marcas else None
         opciones = OpcionesEdicion(plataforma=args.plataforma, adaptacion=args.adaptacion,
                                    posicion_x=args.posicion_x, posicion_y=args.posicion_y, peso=args.peso)
-        resultado = editor.procesar(foto.image, opciones)
+        resultado = editor.procesar(foto.image, opciones, marcas)
         Path(args.salida).write_bytes(resultado.contenido)
     except (ErrorFotoProducto, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

@@ -13,6 +13,10 @@ Adaptacion = Literal["bordes", "recortar"]
 Peso = Literal["liviano", "normal", "maxima"]
 
 
+MARCAS_AYUDA = ("Opcional. Imagen PNG con trazos verdes sobre el producto y rojos sobre lo que se quiere sacar "
+                "(el resto, transparente o negro). Si viene, el fondo se reemplaza por blanco.")
+
+
 class PlataformaOut(BaseModel):
     clave: str
     nombre: str

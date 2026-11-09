@@ -6,6 +6,7 @@ import numpy as np
 
 from fotoproducto.compresion import Compresor
 from fotoproducto.encuadre import ADAPTADORES
+from fotoproducto.fondo import ComponedorFondoBlanco, InterpretadorMarcas, QuitadorFondo
 from fotoproducto.plataformas import CatalogoPlataformas
 from fotoproducto.redimension import Redimensionador
 
@@ -41,15 +42,31 @@ class EditorFotoProducto:
 
     def __init__(self, catalogo: CatalogoPlataformas | None = None,
                  redimensionador: Redimensionador | None = None,
-                 compresor: Compresor | None = None) -> None:
+                 compresor: Compresor | None = None,
+                 interpretador: InterpretadorMarcas | None = None,
+                 quitador: QuitadorFondo | None = None,
+                 componedor: ComponedorFondoBlanco | None = None) -> None:
         self.catalogo = catalogo or CatalogoPlataformas()
         self.redimensionador = redimensionador or Redimensionador()
         self.compresor = compresor or Compresor()
+        self.interpretador = interpretador or InterpretadorMarcas()
+        self.quitador = quitador or QuitadorFondo()
+        self.componedor = componedor or ComponedorFondoBlanco()
 
-    def procesar(self, imagen: np.ndarray, opciones: OpcionesEdicion) -> ResultadoEdicion:
-        """Adapta a la proporción de la plataforma, cambia al tamaño exacto y comprime."""
+    def procesar(self, imagen: np.ndarray, opciones: OpcionesEdicion,
+                 marcas: np.ndarray | None = None) -> ResultadoEdicion:
+        """Quita el fondo (si hay marcas), adapta a la proporción de la plataforma, cambia al
+        tamaño exacto y comprime.
+
+        `marcas` es la imagen de trazos del usuario (verde = producto, rojo = fondo), en BGR.
+        """
         plataforma = self.catalogo.obtener(opciones.plataforma)
         adaptador = ADAPTADORES[opciones.adaptacion](opciones.posicion_x, opciones.posicion_y)
+
+        if marcas is not None:
+            marcadores = self.interpretador.interpretar(marcas, imagen.shape[:2])
+            mascara = self.quitador.mascara(imagen, marcadores)
+            imagen = self.componedor.componer(imagen, mascara)
 
         imagen = adaptador.adaptar(imagen, plataforma.ancho, plataforma.alto)
         imagen, amplio = self.redimensionador.redimensionar(imagen, plataforma.ancho, plataforma.alto)

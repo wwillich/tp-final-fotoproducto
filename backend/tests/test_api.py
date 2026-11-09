@@ -9,12 +9,15 @@ import numpy as np
 
 from app.core import editor
 from app.esquemas import Adaptacion, Peso
-from conftest import foto_bytes
+from conftest import escena, foto_bytes, marcas, png_bytes
 from fotoproducto.encuadre import ADAPTADORES
 
 
-def vista_previa(client, contenido: bytes, nombre="foto.png", **datos):
-    return client.post("/api/vista-previa", files={"archivo": (nombre, contenido, "image/png")}, data=datos)
+def vista_previa(client, contenido: bytes, nombre="foto.png", marcas_png: bytes | None = None, **datos):
+    files = {"archivo": (nombre, contenido, "image/png")}
+    if marcas_png is not None:
+        files["marcas"] = ("marcas.png", marcas_png, "image/png")
+    return client.post("/api/vista-previa", files=files, data=datos)
 
 
 def test_contrato_coincide_con_el_core():
@@ -46,6 +49,39 @@ def test_vista_previa_webp_para_tienda_nube(client):
     r = vista_previa(client, foto_bytes(2000, 2000), plataforma="tiendanube", adaptacion="recortar", posicion_x="0", posicion_y="1")
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
     assert json.loads(unquote(r.headers["x-avisos"])) == []
+
+
+def decodificar(contenido: bytes) -> np.ndarray:
+    return cv2.imdecode(np.frombuffer(contenido, np.uint8), cv2.IMREAD_COLOR)
+
+
+def test_vista_previa_con_marcas_reemplaza_el_fondo_por_blanco(client):
+    foto = png_bytes(escena())
+    con = vista_previa(client, foto, marcas_png=png_bytes(marcas()), plataforma="mercadolibre", peso="maxima")
+    sin = vista_previa(client, foto, plataforma="mercadolibre", peso="maxima")
+    assert con.status_code == 200
+    assert decodificar(con.content)[10:60, 10:60].min() > 245
+    assert abs(int(decodificar(sin.content)[10:60, 10:60].mean()) - 200) < 5
+
+
+def test_vista_previa_marcas_incompletas_da_422(client):
+    r = vista_previa(client, png_bytes(escena()), marcas_png=png_bytes(marcas(fondo=False)), plataforma="mercadolibre")
+    assert r.status_code == 422
+    assert r.json()["detail"] == {
+        "code": "MARCAS_INSUFICIENTES",
+        "message": "Marcá al menos una parte del producto (verde) y una del fondo (rojo).",
+    }
+
+
+def test_vista_previa_producto_no_encontrado_da_422(client, monkeypatch):
+    monkeypatch.setattr(editor.quitador, "area_minima", 0.9)
+    r = vista_previa(client, png_bytes(escena()), marcas_png=png_bytes(marcas()), plataforma="mercadolibre")
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "PRODUCTO_NO_ENCONTRADO"
+
+
+def test_vista_previa_valida_el_archivo_de_marcas(client):
+    r = vista_previa(client, png_bytes(escena()), marcas_png=b"no es una imagen", plataforma="mercadolibre")
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "INVALID_FILE"
 
 
 def test_vista_previa_no_guarda_nada(client):

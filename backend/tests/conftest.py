@@ -37,6 +37,38 @@ def foto_bytes(ancho: int, alto: int, formato: str = "PNG") -> bytes:
     return buf.getvalue()
 
 
+def png_bytes(imagen) -> bytes:
+    """Codifica una imagen BGR como PNG."""
+    from io import BytesIO
+
+    from fotoproducto import to_pil
+
+    buf = BytesIO()
+    to_pil(imagen).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def escena(lado: int = 200):
+    """Producto de prueba: cuadrado azul-rojizo (60..140) sobre un fondo gris."""
+    import numpy as np
+
+    img = np.full((lado, lado, 3), 200, np.uint8)
+    img[60:140, 60:140] = (30, 60, 200)
+    return img
+
+
+def marcas(lado: int = 200, producto: bool = True, fondo: bool = True):
+    """Marcas de prueba para escena(): verde dentro del cuadrado, rojo en una esquina del fondo."""
+    import numpy as np
+
+    img = np.zeros((lado, lado, 3), np.uint8)
+    if producto:
+        img[90:110, 90:110] = (0, 255, 0)
+    if fondo:
+        img[5:25, 5:25] = (0, 0, 255)
+    return img
+
+
 @pytest.fixture(scope="session")
 def client():
     with TestClient(app) as c:

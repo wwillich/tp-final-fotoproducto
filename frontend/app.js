@@ -50,7 +50,17 @@ const state = {
   trabajos: [],       // GET /api/trabajos
   galleryError: null, // ApiError si falló el listado
   viewing: null,      // trabajo guardado que se está mirando en el centro (solo lectura)
+  marcas: {
+    activo: false,    // "Quitar el fondo" encendido
+    clase: "producto", // pincel elegido: "producto" (verde) o "fondo" (rojo)
+    tam: 20,          // tamaño del pincel (en milésimas del lado mayor de la foto)
+    trazos: [],       // [{ clase, ancho, puntos: [[x, y], …] }] en píxeles de la foto
+  },
 };
+
+// Colores puros: el backend distingue producto (verde) de fondo (rojo) por el canal dominante.
+const COLOR_MARCA = { producto: "#00ff00", fondo: "#ff0000" };
+const MARCAS_LADO_MAX = 1600;  // las marcas se mandan reducidas: el servidor las reescala a la foto
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, attrs = {}, ...children) => {
@@ -93,6 +103,8 @@ function errorMessage(status, body) {
 function errorTitle(status, code) {
   if (code === "UNSUPPORTED_FORMAT") return "Formato no soportado";
   if (code === "INVALID_FILE") return "Archivo inválido";
+  if (code === "MARCAS_INSUFICIENTES") return "Faltan marcas";
+  if (code === "PRODUCTO_NO_ENCONTRADO") return "No pudimos separar el producto";
   if (status === 0) return "Sin conexión con el servidor";
   if (status === 404) return "No encontrado";
   if (status === 400 || status === 422) return "Pedido inválido";
@@ -191,6 +203,7 @@ function uploadFile(file) {
   previewSeq++;  // la respuesta pendiente (si la hay) era de la foto anterior
   state.busy = false;
   state.viewing = null;
+  state.marcas.trazos = [];
   setPreview(null, null);
   renderGallery();
   renderPhoto();
@@ -239,11 +252,12 @@ function schedulePreview(delay = 300) {
   }
 }
 
-/** Formulario que entienden /api/vista-previa y /api/trabajos: la foto y todas las opciones. */
-function buildForm(source, o) {
+/** Formulario que entienden /api/vista-previa y /api/trabajos: la foto, las opciones y (si hay) las marcas. */
+async function buildForm(source, o) {
   const fd = new FormData();
   fd.append("archivo", source.file, source.name);
   for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso"]) fd.append(campo, o[campo]);
+  if (marcasListas() && source.width) fd.append("marcas", await exportarMarcas(source), "marcas.png");
   return fd;
 }
 
@@ -255,7 +269,7 @@ async function runPreview() {
   state.busy = true;
   renderResult();
   try {
-    const r = await api("POST", "/api/vista-previa", { formData: buildForm(source, state.options), raw: true });
+    const r = await api("POST", "/api/vista-previa", { formData: await buildForm(source, state.options), raw: true });
     const blob = await r.blob();
     if (seq !== previewSeq) return;
     setPreview({
@@ -298,9 +312,115 @@ function renderPhoto() {
   $("#photo-meta").textContent = source
     ? [source.width ? `${source.width} × ${source.height}` : null, source.name].filter(Boolean).join(" · ")
     : "";
-  frame.replaceChildren(source
-    ? el("img", { src: source.url, alt: source.name })
-    : el("div", { class: "empty" }, "Subí una foto para empezar"));
+  if (!source) {
+    frame.replaceChildren(el("div", { class: "empty" }, "Subí una foto para empezar"));
+  } else if (!source.width) {  // todavía no se midió: sin capa de marcas
+    frame.replaceChildren(el("img", { src: source.url, alt: source.name }));
+  } else {
+    frame.replaceChildren(el("div", { class: "stage", style: `--ar: ${source.width} / ${source.height}` },
+      el("img", { src: source.url, alt: source.name, draggable: "false" }), crearCanvasMarcas(source)));
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Marcas para quitar el fondo                                               */
+/* ------------------------------------------------------------------------ */
+
+const marcasListas = () => state.marcas.activo
+  && ["producto", "fondo"].every((clase) => state.marcas.trazos.some((t) => t.clase === clase));
+
+function dibujarTrazo(ctx, trazo) {
+  const [primero, ...resto] = trazo.puntos;
+  ctx.strokeStyle = ctx.fillStyle = COLOR_MARCA[trazo.clase];
+  ctx.lineWidth = trazo.ancho;
+  ctx.lineCap = ctx.lineJoin = "round";
+  if (!resto.length) {  // un toque suelto: un punto
+    ctx.beginPath();
+    ctx.arc(primero[0], primero[1], trazo.ancho / 2, 0, 2 * Math.PI);
+    ctx.fill();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(...primero);
+  for (const p of resto) ctx.lineTo(...p);
+  ctx.stroke();
+}
+
+function redibujarMarcas(canvas) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const trazo of state.marcas.trazos) dibujarTrazo(ctx, trazo);
+}
+
+/** Capa transparente del mismo tamaño en píxeles que la foto, para pintar encima con el mouse o el dedo. */
+function crearCanvasMarcas(source) {
+  const canvas = el("canvas", {
+    id: "marcas-canvas", width: source.width, height: source.height, hidden: !state.marcas.activo,
+    "aria-label": "Zona para marcar el producto y el fondo",
+  });
+  redibujarMarcas(canvas);
+
+  let trazo = null;
+  const punto = (e) => {  // de la pantalla a píxeles de la foto (el canvas se muestra escalado por CSS)
+    const r = canvas.getBoundingClientRect();
+    return [(e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height];
+  };
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    canvas.setPointerCapture(e.pointerId);
+    const m = state.marcas;
+    trazo = { clase: m.clase, ancho: Math.max(source.width, source.height) * m.tam / 1000, puntos: [punto(e)] };
+    m.trazos.push(trazo);
+    dibujarTrazo(canvas.getContext("2d"), trazo);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!trazo) return;
+    const ctx = canvas.getContext("2d");
+    const anterior = trazo.puntos.at(-1);
+    trazo.puntos.push(punto(e));
+    dibujarTrazo(ctx, { ...trazo, puntos: [anterior, trazo.puntos.at(-1)] });  // solo el tramo nuevo
+  });
+  const soltar = () => {
+    if (!trazo) return;
+    trazo = null;
+    renderMarcas();
+    schedulePreview();
+  };
+  canvas.addEventListener("pointerup", soltar);
+  canvas.addEventListener("pointercancel", soltar);
+  return canvas;
+}
+
+/** Imagen PNG de las marcas (verde y rojo sobre transparente), reducida a MARCAS_LADO_MAX. */
+function exportarMarcas(source) {
+  const escala = Math.min(1, MARCAS_LADO_MAX / Math.max(source.width, source.height));
+  const canvas = el("canvas", { width: Math.round(source.width * escala), height: Math.round(source.height * escala) });
+  const ctx = canvas.getContext("2d");
+  ctx.scale(escala, escala);
+  for (const trazo of state.marcas.trazos) dibujarTrazo(ctx, trazo);
+  return new Promise((ok) => canvas.toBlob(ok, "image/png"));
+}
+
+function renderMarcas() {
+  const m = state.marcas;
+  $("#quitar-fondo").checked = m.activo;
+  $("#marcas-controles").hidden = !m.activo;
+  for (const b of document.querySelectorAll("#pincel button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.value === m.clase));
+  }
+  $("#pincel-tam").value = m.tam;
+  $("#btn-deshacer").disabled = $("#btn-borrar-marcas").disabled = !m.trazos.length;
+  $("#marcas-aviso").hidden = marcasListas() || !m.activo;
+  const canvas = $("#marcas-canvas");
+  if (canvas) canvas.hidden = !m.activo;
+}
+
+function cambiarMarcas(cambio) {
+  cambio();
+  const canvas = $("#marcas-canvas");
+  if (canvas) redibujarMarcas(canvas);
+  renderMarcas();
+  schedulePreview();
 }
 
 function renderSaveButton() {
@@ -376,6 +496,7 @@ function renderOptions() {
   $("#posicion-x").value = Math.round(o.posicion_x * 100);
   $("#posicion-y").value = Math.round(o.posicion_y * 100);
   $("#posicion-help").textContent = AYUDA_POSICION[eje ?? "ninguno"];
+  renderMarcas();
 }
 
 async function loadPlataformas() {
@@ -416,7 +537,7 @@ async function save() {
   state.saving = true;
   renderSaveButton();
   try {
-    const trabajo = await api("POST", "/api/trabajos", { formData: buildForm(source, state.options) });
+    const trabajo = await api("POST", "/api/trabajos", { formData: await buildForm(source, state.options) });
     download(trabajo);
     toast("ok", "Foto guardada", "Quedó en tu galería y se descargó.");
     await loadGallery();
@@ -537,6 +658,14 @@ function bindEvents() {
     }
   }
   $("#btn-guardar").addEventListener("click", save);
+
+  $("#quitar-fondo").addEventListener("change", (e) => cambiarMarcas(() => { state.marcas.activo = e.target.checked; }));
+  for (const b of document.querySelectorAll("#pincel button")) {
+    b.addEventListener("click", () => { state.marcas.clase = b.dataset.value; renderMarcas(); });
+  }
+  $("#pincel-tam").addEventListener("input", (e) => { state.marcas.tam = Number(e.target.value); });
+  $("#btn-deshacer").addEventListener("click", () => cambiarMarcas(() => state.marcas.trazos.pop()));
+  $("#btn-borrar-marcas").addEventListener("click", () => cambiarMarcas(() => { state.marcas.trazos = []; }));
 }
 
 function init() {

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -30,6 +30,15 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Ancho", "X-Alto", "X-Peso-Bytes", "X-Calidad", "X-Avisos"],
 )
+
+
+@app.middleware("http")
+async def revalidar_frontend(request: Request, call_next):
+    """Los archivos del frontend se revalidan en cada carga (ETag): así el navegador no muestra un CSS o JS viejo."""
+    response = await call_next(request)
+    if not request.url.path.startswith(("/api", MEDIA_URL)):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.get("/api/health", tags=["sistema"], summary="Estado del servidor")

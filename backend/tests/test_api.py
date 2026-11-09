@@ -9,14 +9,14 @@ import numpy as np
 
 from app.core import editor
 from app.esquemas import Adaptacion, Peso
-from conftest import escena, foto_bytes, marcas, png_bytes
+from conftest import contorno, escena_ruidosa, foto_bytes, png_bytes
 from fotoproducto.encuadre import ADAPTADORES
 
 
-def vista_previa(client, contenido: bytes, nombre="foto.png", marcas_png: bytes | None = None, **datos):
+def vista_previa(client, contenido: bytes, nombre="foto.png", contorno_png: bytes | None = None, **datos):
     files = {"archivo": (nombre, contenido, "image/png")}
-    if marcas_png is not None:
-        files["marcas"] = ("marcas.png", marcas_png, "image/png")
+    if contorno_png is not None:
+        files["contorno"] = ("contorno.png", contorno_png, "image/png")
     return client.post("/api/vista-previa", files=files, data=datos)
 
 
@@ -55,32 +55,35 @@ def decodificar(contenido: bytes) -> np.ndarray:
     return cv2.imdecode(np.frombuffer(contenido, np.uint8), cv2.IMREAD_COLOR)
 
 
-def test_vista_previa_con_marcas_reemplaza_el_fondo_por_blanco(client):
-    foto = png_bytes(escena())
-    con = vista_previa(client, foto, marcas_png=png_bytes(marcas()), plataforma="mercadolibre", peso="maxima")
+def test_vista_previa_quitar_fondo_reemplaza_el_fondo_por_blanco(client):
+    foto = png_bytes(escena_ruidosa())
+    auto = vista_previa(client, foto, plataforma="mercadolibre", peso="maxima", quitar_fondo="true")
+    guiado = vista_previa(client, foto, contorno_png=png_bytes(contorno()), plataforma="mercadolibre", peso="maxima")
     sin = vista_previa(client, foto, plataforma="mercadolibre", peso="maxima")
-    assert con.status_code == 200
-    assert decodificar(con.content)[10:60, 10:60].min() > 245
+    assert auto.status_code == 200 and guiado.status_code == 200
+    assert decodificar(auto.content)[10:60, 10:60].min() > 245
+    assert decodificar(guiado.content)[10:60, 10:60].min() > 245   # un contorno implica quitar el fondo
     assert abs(int(decodificar(sin.content)[10:60, 10:60].mean()) - 200) < 5
 
 
-def test_vista_previa_marcas_incompletas_da_422(client):
-    r = vista_previa(client, png_bytes(escena()), marcas_png=png_bytes(marcas(fondo=False)), plataforma="mercadolibre")
+def test_vista_previa_contorno_vacio_da_422(client):
+    r = vista_previa(client, png_bytes(escena_ruidosa()), contorno_png=png_bytes(contorno(caja=(0, 0, 0, 0))),
+                     plataforma="mercadolibre")
     assert r.status_code == 422
     assert r.json()["detail"] == {
-        "code": "MARCAS_INSUFICIENTES",
-        "message": "Marcá al menos una parte del producto (verde) y una del fondo (rojo).",
+        "code": "CONTORNO_INVALIDO",
+        "message": "El contorno no encierra ninguna zona de la foto. Dibujalo de nuevo rodeando el producto.",
     }
 
 
 def test_vista_previa_producto_no_encontrado_da_422(client, monkeypatch):
     monkeypatch.setattr(editor.quitador, "area_minima", 0.9)
-    r = vista_previa(client, png_bytes(escena()), marcas_png=png_bytes(marcas()), plataforma="mercadolibre")
+    r = vista_previa(client, png_bytes(escena_ruidosa()), plataforma="mercadolibre", quitar_fondo="true")
     assert r.status_code == 422 and r.json()["detail"]["code"] == "PRODUCTO_NO_ENCONTRADO"
 
 
-def test_vista_previa_valida_el_archivo_de_marcas(client):
-    r = vista_previa(client, png_bytes(escena()), marcas_png=b"no es una imagen", plataforma="mercadolibre")
+def test_vista_previa_valida_el_archivo_de_contorno(client):
+    r = vista_previa(client, png_bytes(escena_ruidosa()), contorno_png=b"no es una imagen", plataforma="mercadolibre")
     assert r.status_code == 400 and r.json()["detail"]["code"] == "INVALID_FILE"
 
 

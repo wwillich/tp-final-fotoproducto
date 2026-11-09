@@ -6,7 +6,7 @@ import sys
 
 import cv2
 
-from conftest import BACKEND_DIR, escena, foto_bytes, marcas, png_bytes
+from conftest import BACKEND_DIR, contorno, escena_ruidosa, foto_bytes, png_bytes
 
 
 def correr(*args):
@@ -25,22 +25,30 @@ def test_cli_genera_el_archivo(tmp_path):
     assert cv2.imread(str(salida)).shape[:2] == (1350, 1080)
 
 
-def test_cli_con_marcas_quita_el_fondo(tmp_path):
-    entrada, marcas_png, salida = tmp_path / "in.png", tmp_path / "marcas.png", tmp_path / "out.jpg"
-    entrada.write_bytes(png_bytes(escena()))
-    marcas_png.write_bytes(png_bytes(marcas()))
-    r = correr(entrada, salida, "--plataforma", "mercadolibre", "--peso", "maxima", "--marcas", marcas_png)
+def test_cli_quitar_fondo_automatico(tmp_path):
+    entrada, salida = tmp_path / "in.png", tmp_path / "out.jpg"
+    entrada.write_bytes(png_bytes(escena_ruidosa()))
+    r = correr(entrada, salida, "--plataforma", "mercadolibre", "--peso", "maxima", "--quitar-fondo")
     assert r.returncode == 0, r.stderr
     assert cv2.imread(str(salida))[10:60, 10:60].min() > 245
 
 
-def test_cli_marcas_incompletas_o_inexistentes_fallan_por_stderr(tmp_path):
-    entrada, marcas_png = tmp_path / "in.png", tmp_path / "marcas.png"
-    entrada.write_bytes(png_bytes(escena()))
-    marcas_png.write_bytes(png_bytes(marcas(fondo=False)))
-    r = correr(entrada, tmp_path / "out.jpg", "--plataforma", "mercadolibre", "--marcas", marcas_png)
-    assert r.returncode != 0 and "Marcá al menos" in r.stderr
-    r = correr(entrada, tmp_path / "out.jpg", "--plataforma", "mercadolibre", "--marcas", tmp_path / "no_existe.png")
+def test_cli_con_contorno_quita_el_fondo(tmp_path):
+    entrada, contorno_png, salida = tmp_path / "in.png", tmp_path / "contorno.png", tmp_path / "out.jpg"
+    entrada.write_bytes(png_bytes(escena_ruidosa()))
+    contorno_png.write_bytes(png_bytes(contorno()))
+    r = correr(entrada, salida, "--plataforma", "mercadolibre", "--peso", "maxima", "--contorno", contorno_png)
+    assert r.returncode == 0, r.stderr
+    assert cv2.imread(str(salida))[10:60, 10:60].min() > 245
+
+
+def test_cli_contorno_vacio_o_inexistente_fallan_por_stderr(tmp_path):
+    entrada, contorno_png = tmp_path / "in.png", tmp_path / "contorno.png"
+    entrada.write_bytes(png_bytes(escena_ruidosa()))
+    contorno_png.write_bytes(png_bytes(contorno(caja=(0, 0, 0, 0))))
+    r = correr(entrada, tmp_path / "out.jpg", "--plataforma", "mercadolibre", "--contorno", contorno_png)
+    assert r.returncode != 0 and "no encierra" in r.stderr
+    r = correr(entrada, tmp_path / "out.jpg", "--plataforma", "mercadolibre", "--contorno", tmp_path / "no_existe.png")
     assert r.returncode != 0 and "Error:" in r.stderr
 
 

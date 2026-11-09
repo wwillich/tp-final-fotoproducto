@@ -13,9 +13,9 @@ repositorio = RepositorioTrabajos()
 
 
 async def procesar_subida(archivo: UploadFile, opciones: OpcionesEdicion,
-                          marcas: UploadFile | None = None) -> tuple[Upload, ResultadoEdicion]:
-    """Valida la foto (y las marcas, si vienen) y la procesa en un hilo, para no frenar al servidor."""
+                          contorno: UploadFile | None = None) -> tuple[Upload, ResultadoEdicion]:
+    """Valida la foto (y el contorno, si viene) y la procesa en un hilo, para no frenar al servidor."""
     subida = await read_upload(archivo)
-    imagen_marcas = (await read_upload(marcas)).photo.image if marcas is not None else None
-    resultado = await run_in_threadpool(editor.procesar, subida.photo.image, opciones, imagen_marcas)
+    imagen_contorno = (await read_upload(contorno)).photo.image if contorno is not None else None
+    resultado = await run_in_threadpool(editor.procesar, subida.photo.image, opciones, imagen_contorno)
     return subida, resultado

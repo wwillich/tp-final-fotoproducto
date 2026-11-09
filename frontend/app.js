@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Foto de producto (frontend)
  *
  * Dónde busca la API:
@@ -42,7 +42,8 @@ const AYUDA_POSICION = {
 const state = {
   source: null,       // foto cargada: { name, url, file, width, height }
   plataformas: [],    // GET /api/plataformas
-  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal" },
+  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal", quitar_fondo: false },
+  contorno: [],       // línea dibujada alrededor del producto: [[x, y], …] en píxeles de la foto (vacío = automático)
   preview: null,      // { url, ancho, alto, peso, calidad, avisos } de la última vista previa
   previewError: null, // ApiError de la última vista previa fallida
   busy: false,        // hay una vista previa en camino
@@ -50,17 +51,15 @@ const state = {
   trabajos: [],       // GET /api/trabajos
   galleryError: null, // ApiError si falló el listado
   viewing: null,      // trabajo guardado que se está mirando en el centro (solo lectura)
-  marcas: {
-    activo: false,    // "Quitar el fondo" encendido
-    clase: "producto", // pincel elegido: "producto" (verde) o "fondo" (rojo)
-    tam: 20,          // tamaño del pincel (en milésimas del lado mayor de la foto)
-    trazos: [],       // [{ clase, ancho, puntos: [[x, y], …] }] en píxeles de la foto
-  },
 };
 
-// Colores puros: el backend distingue producto (verde) de fondo (rojo) por el canal dominante.
-const COLOR_MARCA = { producto: "#00ff00", fondo: "#ff0000" };
-const MARCAS_LADO_MAX = 1600;  // las marcas se mandan reducidas: el servidor las reescala a la foto
+const COLOR_CONTORNO = "#00c878";
+const CONTORNO_LADO_MAX = 1600;  // el contorno se manda reducido: el servidor lo reescala a la foto
+const CONTORNO_SUAVIZADO = 0.03; // ventana del alisado del trazo, fracción de sus puntos a cada lado
+const CONTORNO_PUNTOS = 18;      // puntos de control que se pueden mover
+const CONTORNO_PUNTOS_MIN = 4;   // con menos puntos no se puede sacar ninguno más
+const CONTORNO_TOQUE = 14;       // distancia (px de pantalla) a la que un toque agarra un punto o la línea
+const CONTORNO_MIN = 0.03;       // una raya más corta que esto (fracción del lado mayor) no cuenta como contorno
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, attrs = {}, ...children) => {
@@ -103,7 +102,7 @@ function errorMessage(status, body) {
 function errorTitle(status, code) {
   if (code === "UNSUPPORTED_FORMAT") return "Formato no soportado";
   if (code === "INVALID_FILE") return "Archivo inválido";
-  if (code === "MARCAS_INSUFICIENTES") return "Faltan marcas";
+  if (code === "CONTORNO_INVALIDO") return "Contorno inválido";
   if (code === "PRODUCTO_NO_ENCONTRADO") return "No pudimos separar el producto";
   if (status === 0) return "Sin conexión con el servidor";
   if (status === 404) return "No encontrado";
@@ -203,7 +202,7 @@ function uploadFile(file) {
   previewSeq++;  // la respuesta pendiente (si la hay) era de la foto anterior
   state.busy = false;
   state.viewing = null;
-  state.marcas.trazos = [];
+  state.contorno = [];
   setPreview(null, null);
   renderGallery();
   renderPhoto();
@@ -252,12 +251,12 @@ function schedulePreview(delay = 300) {
   }
 }
 
-/** Formulario que entienden /api/vista-previa y /api/trabajos: la foto, las opciones y (si hay) las marcas. */
+/** Formulario que entienden /api/vista-previa y /api/trabajos: la foto, las opciones y (si hay) el contorno. */
 async function buildForm(source, o) {
   const fd = new FormData();
   fd.append("archivo", source.file, source.name);
-  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso"]) fd.append(campo, o[campo]);
-  if (marcasListas() && source.width) fd.append("marcas", await exportarMarcas(source), "marcas.png");
+  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso", "quitar_fondo"]) fd.append(campo, o[campo]);
+  if (contornoListo() && source.width) fd.append("contorno", await exportarContorno(source), "contorno.png");
   return fd;
 }
 
@@ -314,112 +313,245 @@ function renderPhoto() {
     : "";
   if (!source) {
     frame.replaceChildren(el("div", { class: "empty" }, "Subí una foto para empezar"));
-  } else if (!source.width) {  // todavía no se midió: sin capa de marcas
+  } else if (!source.width) {  // todavía no se midió: sin capa de dibujo
     frame.replaceChildren(el("img", { src: source.url, alt: source.name }));
   } else {
     frame.replaceChildren(el("div", { class: "stage", style: `--ar: ${source.width} / ${source.height}` },
-      el("img", { src: source.url, alt: source.name, draggable: "false" }), crearCanvasMarcas(source)));
+      el("img", { src: source.url, alt: source.name, draggable: "false" }), crearCanvasContorno(source)));
   }
 }
 
 /* ------------------------------------------------------------------------ */
-/* Marcas para quitar el fondo                                               */
+/* Quitar el fondo: automático, o con un contorno dibujado                   */
 /* ------------------------------------------------------------------------ */
 
-const marcasListas = () => state.marcas.activo
-  && ["producto", "fondo"].every((clase) => state.marcas.trazos.some((t) => t.clase === clase));
+const contornoListo = () => state.options.quitar_fondo && state.contorno.length > 2;
 
-function dibujarTrazo(ctx, trazo) {
-  const [primero, ...resto] = trazo.puntos;
-  ctx.strokeStyle = ctx.fillStyle = COLOR_MARCA[trazo.clase];
-  ctx.lineWidth = trazo.ancho;
-  ctx.lineCap = ctx.lineJoin = "round";
-  if (!resto.length) {  // un toque suelto: un punto
-    ctx.beginPath();
-    ctx.arc(primero[0], primero[1], trazo.ancho / 2, 0, 2 * Math.PI);
-    ctx.fill();
-    return;
+const anchoLinea = (w, h) => Math.max(2, Math.max(w, h) / 300);
+
+/** Alisa el pulso de la mano: promedia cada punto con sus vecinos (el trazo se trata como cerrado). */
+function suavizarTrazo(puntos) {
+  const n = puntos.length;
+  const radio = Math.max(2, Math.round(n * CONTORNO_SUAVIZADO));
+  return puntos.map((_, i) => {
+    let x = 0, y = 0;
+    for (let k = -radio; k <= radio; k++) {
+      const p = puntos[(i + k + n) % n];
+      x += p[0];
+      y += p[1];
+    }
+    return [x / (2 * radio + 1), y / (2 * radio + 1)];
+  });
+}
+
+/** Deja el trazo en CONTORNO_PUNTOS puntos de control repartidos por igual a lo largo de la línea cerrada. */
+function puntosDeControl(trazo) {
+  const n = trazo.length;
+  const largo = trazo.map((p, i) => Math.hypot(trazo[(i + 1) % n][0] - p[0], trazo[(i + 1) % n][1] - p[1]));
+  const total = largo.reduce((a, b) => a + b, 0);
+  const paso = total / CONTORNO_PUNTOS;
+  const control = [];
+  let i = 0, acumulado = 0;
+  for (let k = 0; k < CONTORNO_PUNTOS; k++) {
+    while (i < n - 1 && acumulado + largo[i] < k * paso) acumulado += largo[i++];
+    const a = trazo[i], b = trazo[(i + 1) % n];
+    const t = largo[i] ? (k * paso - acumulado) / largo[i] : 0;
+    control.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
   }
+  return control;
+}
+
+/** Curva suave que pasa cerca de los puntos de control (corte de esquinas de Chaikin, línea cerrada). */
+function curvaSuave(control) {
+  let puntos = control;
+  for (let vuelta = 0; vuelta < 3; vuelta++) {
+    puntos = puntos.flatMap((p, i) => {
+      const q = puntos[(i + 1) % puntos.length];
+      return [[.75 * p[0] + .25 * q[0], .75 * p[1] + .25 * q[1]], [.25 * p[0] + .75 * q[0], .25 * p[1] + .75 * q[1]]];
+    });
+  }
+  return puntos;
+}
+
+function trazarCamino(ctx, puntos) {
   ctx.beginPath();
-  ctx.moveTo(...primero);
-  for (const p of resto) ctx.lineTo(...p);
+  ctx.moveTo(...puntos[0]);
+  for (const p of puntos.slice(1)) ctx.lineTo(...p);
+}
+
+/** Trazo en curso, todavía abierto: solo una línea. */
+function dibujarTrazo(ctx, puntos, ancho) {
+  if (puntos.length < 2) return;
+  trazarCamino(ctx, puntos);
+  ctx.strokeStyle = COLOR_CONTORNO;
+  ctx.lineWidth = ancho;
+  ctx.lineJoin = ctx.lineCap = "round";
   ctx.stroke();
 }
 
-function redibujarMarcas(canvas) {
+/** Contorno terminado: línea, relleno suave y un punto en cada punto de control. */
+function dibujarContorno(canvas) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (const trazo of state.marcas.trazos) dibujarTrazo(ctx, trazo);
+  if (state.contorno.length < 3) return;
+  const ancho = anchoLinea(canvas.width, canvas.height);
+  trazarCamino(ctx, curvaSuave(state.contorno));
+  ctx.closePath();
+  ctx.fillStyle = "rgba(0, 200, 120, .18)";
+  ctx.fill();
+  ctx.strokeStyle = COLOR_CONTORNO;
+  ctx.lineWidth = ancho;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.lineWidth = ancho * .8;
+  for (const [x, y] of state.contorno) {
+    ctx.beginPath();
+    ctx.arc(x, y, ancho * 2.6, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
-/** Capa transparente del mismo tamaño en píxeles que la foto, para pintar encima con el mouse o el dedo. */
-function crearCanvasMarcas(source) {
-  const canvas = el("canvas", {
-    id: "marcas-canvas", width: source.width, height: source.height, hidden: !state.marcas.activo,
-    "aria-label": "Zona para marcar el producto y el fondo",
-  });
-  redibujarMarcas(canvas);
+/** Distancia de un punto a un segmento, y el punto más cercano del segmento. */
+function acercarASegmento(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const t = dx || dy ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy))) : 0;
+  const q = [a[0] + dx * t, a[1] + dy * t];
+  return { distancia: Math.hypot(p[0] - q[0], p[1] - q[1]), punto: q };
+}
 
-  let trazo = null;
+/**
+ * Capa transparente del mismo tamaño en píxeles que la foto, para dibujar encima con el mouse o el dedo.
+ * - Arrastrar en un lugar libre dibuja un contorno nuevo.
+ * - Arrastrar un punto lo mueve; arrastrar sobre la línea agrega un punto ahí; doble clic en un punto lo saca.
+ */
+function crearCanvasContorno(source) {
+  const canvas = el("canvas", {
+    id: "contorno-canvas", width: source.width, height: source.height, hidden: !state.options.quitar_fondo,
+    "aria-label": "Zona para dibujar una línea alrededor del producto",
+  });
+  dibujarContorno(canvas);
+
+  let trazo = null;     // trazo libre en curso
+  let previo = [];      // el contorno que había antes de empezar a dibujar
+  let movido = null;    // índice del punto de control que se está arrastrando
+  let cambio = false;   // el arrastre de un punto cambió algo
   const punto = (e) => {  // de la pantalla a píxeles de la foto (el canvas se muestra escalado por CSS)
     const r = canvas.getBoundingClientRect();
     return [(e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height];
   };
+  const tolerancia = () => CONTORNO_TOQUE * canvas.width / canvas.getBoundingClientRect().width;
+  const puntoCerca = (p) => state.contorno.findIndex((c) => Math.hypot(c[0] - p[0], c[1] - p[1]) < tolerancia());
+  const lineaCerca = (p) => {  // índice del tramo de control más cercano, si p está sobre la línea
+    const c = state.contorno;
+    let mejor = null;
+    c.forEach((a, i) => {
+      const r = acercarASegmento(p, a, c[(i + 1) % c.length]);
+      if (r.distancia < tolerancia() && (!mejor || r.distancia < mejor.distancia)) mejor = { ...r, i };
+    });
+    return mejor;
+  };
+
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     canvas.setPointerCapture(e.pointerId);
-    const m = state.marcas;
-    trazo = { clase: m.clase, ancho: Math.max(source.width, source.height) * m.tam / 1000, puntos: [punto(e)] };
-    m.trazos.push(trazo);
-    dibujarTrazo(canvas.getContext("2d"), trazo);
+    const p = punto(e);
+    cambio = false;
+    if (state.contorno.length > 2) {
+      movido = puntoCerca(p);
+      if (movido < 0) {
+        const cerca = lineaCerca(p);
+        if (cerca) {
+          state.contorno = state.contorno.toSpliced(cerca.i + 1, 0, cerca.punto);
+          movido = cerca.i + 1;
+          cambio = true;
+        } else {
+          movido = null;
+        }
+      }
+      if (movido !== null) {
+        dibujarContorno(canvas);
+        return;
+      }
+    }
+    movido = null;
+    previo = state.contorno;
+    trazo = [p];
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!trazo) return;
-    const ctx = canvas.getContext("2d");
-    const anterior = trazo.puntos.at(-1);
-    trazo.puntos.push(punto(e));
-    dibujarTrazo(ctx, { ...trazo, puntos: [anterior, trazo.puntos.at(-1)] });  // solo el tramo nuevo
+    if (movido !== null) {
+      state.contorno = state.contorno.with(movido, punto(e));
+      cambio = true;
+      dibujarContorno(canvas);
+    } else if (trazo) {
+      trazo.push(punto(e));
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      dibujarTrazo(ctx, trazo, anchoLinea(canvas.width, canvas.height));
+    }
   });
   const soltar = () => {
+    if (movido !== null) {
+      movido = null;
+      if (cambio) schedulePreview();
+      return;
+    }
     if (!trazo) return;
+    const xs = trazo.map((p) => p[0]), ys = trazo.map((p) => p[1]);
+    const lado = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    // Un toque o una raya mínima no es un contorno: se conserva el anterior.
+    const valido = lado > Math.max(source.width, source.height) * CONTORNO_MIN;
+    state.contorno = valido ? puntosDeControl(suavizarTrazo(trazo)) : previo;
     trazo = null;
-    renderMarcas();
-    schedulePreview();
+    dibujarContorno(canvas);
+    renderFondo();
+    if (state.contorno !== previo) schedulePreview();
   };
   canvas.addEventListener("pointerup", soltar);
   canvas.addEventListener("pointercancel", soltar);
+  canvas.addEventListener("dblclick", (e) => {
+    const i = state.contorno.length > CONTORNO_PUNTOS_MIN ? puntoCerca(punto(e)) : -1;
+    if (i < 0) return;
+    state.contorno = state.contorno.toSpliced(i, 1);
+    dibujarContorno(canvas);
+    schedulePreview();
+  });
   return canvas;
 }
 
-/** Imagen PNG de las marcas (verde y rojo sobre transparente), reducida a MARCAS_LADO_MAX. */
-function exportarMarcas(source) {
-  const escala = Math.min(1, MARCAS_LADO_MAX / Math.max(source.width, source.height));
+/** Imagen PNG del contorno (la zona encerrada en blanco, el resto negro), reducida a CONTORNO_LADO_MAX. */
+function exportarContorno(source) {
+  const escala = Math.min(1, CONTORNO_LADO_MAX / Math.max(source.width, source.height));
   const canvas = el("canvas", { width: Math.round(source.width * escala), height: Math.round(source.height * escala) });
   const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.scale(escala, escala);
-  for (const trazo of state.marcas.trazos) dibujarTrazo(ctx, trazo);
+  trazarCamino(ctx, curvaSuave(state.contorno));
+  ctx.closePath();
+  ctx.fillStyle = "#fff";
+  ctx.fill();
   return new Promise((ok) => canvas.toBlob(ok, "image/png"));
 }
 
-function renderMarcas() {
-  const m = state.marcas;
-  $("#quitar-fondo").checked = m.activo;
-  $("#marcas-controles").hidden = !m.activo;
-  for (const b of document.querySelectorAll("#pincel button")) {
-    b.setAttribute("aria-pressed", String(b.dataset.value === m.clase));
-  }
-  $("#pincel-tam").value = m.tam;
-  $("#btn-deshacer").disabled = $("#btn-borrar-marcas").disabled = !m.trazos.length;
-  $("#marcas-aviso").hidden = marcasListas() || !m.activo;
-  const canvas = $("#marcas-canvas");
-  if (canvas) canvas.hidden = !m.activo;
+function renderFondo() {
+  const activo = state.options.quitar_fondo;
+  $("#quitar-fondo").checked = activo;
+  $("#contorno-controles").hidden = !activo;
+  $("#btn-borrar-contorno").disabled = !state.contorno.length;
+  $("#contorno-aviso").textContent = state.contorno.length
+    ? "Usamos tu contorno. Arrastrá un punto para corregirlo, tocá la línea para agregar uno o hacé doble clic en un punto para sacarlo."
+    : "Lo hicimos automáticamente. Si no quedó bien, dibujá una línea alrededor de tu producto, sobre la foto.";
+  const canvas = $("#contorno-canvas");
+  if (canvas) canvas.hidden = !activo;
 }
 
-function cambiarMarcas(cambio) {
+function cambiarFondo(cambio) {
   cambio();
-  const canvas = $("#marcas-canvas");
-  if (canvas) redibujarMarcas(canvas);
-  renderMarcas();
+  const canvas = $("#contorno-canvas");
+  if (canvas) dibujarContorno(canvas);
+  renderFondo();
   schedulePreview();
 }
 
@@ -496,7 +628,7 @@ function renderOptions() {
   $("#posicion-x").value = Math.round(o.posicion_x * 100);
   $("#posicion-y").value = Math.round(o.posicion_y * 100);
   $("#posicion-help").textContent = AYUDA_POSICION[eje ?? "ninguno"];
-  renderMarcas();
+  renderFondo();
 }
 
 async function loadPlataformas() {
@@ -659,13 +791,8 @@ function bindEvents() {
   }
   $("#btn-guardar").addEventListener("click", save);
 
-  $("#quitar-fondo").addEventListener("change", (e) => cambiarMarcas(() => { state.marcas.activo = e.target.checked; }));
-  for (const b of document.querySelectorAll("#pincel button")) {
-    b.addEventListener("click", () => { state.marcas.clase = b.dataset.value; renderMarcas(); });
-  }
-  $("#pincel-tam").addEventListener("input", (e) => { state.marcas.tam = Number(e.target.value); });
-  $("#btn-deshacer").addEventListener("click", () => cambiarMarcas(() => state.marcas.trazos.pop()));
-  $("#btn-borrar-marcas").addEventListener("click", () => cambiarMarcas(() => { state.marcas.trazos = []; }));
+  $("#quitar-fondo").addEventListener("change", (e) => cambiarFondo(() => { state.options.quitar_fondo = e.target.checked; }));
+  $("#btn-borrar-contorno").addEventListener("click", () => cambiarFondo(() => { state.contorno = []; }));
 }
 
 function init() {

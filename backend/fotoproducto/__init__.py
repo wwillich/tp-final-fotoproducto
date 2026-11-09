@@ -8,13 +8,13 @@ la línea de comandos (`python -m fotoproducto`) o desde cualquier otro programa
 
 from fotoproducto.editor import EditorFotoProducto, OpcionesEdicion, ResultadoEdicion
 from fotoproducto.exceptions import (
-    ErrorFotoProducto, InvalidImage, MarcasInsuficientes, PlataformaDesconocida, ProductoNoEncontrado,
+    ContornoInvalido, ErrorFotoProducto, InvalidImage, PlataformaDesconocida, ProductoNoEncontrado,
 )
 from fotoproducto.imageio import Photo, encode_png, from_pil, read_photo, to_pil
 from fotoproducto.plataformas import CatalogoPlataformas, Plataforma
 
 __all__ = [
-    "CatalogoPlataformas", "EditorFotoProducto", "ErrorFotoProducto", "InvalidImage",
-    "MarcasInsuficientes", "OpcionesEdicion", "Photo", "Plataforma", "PlataformaDesconocida",
+    "CatalogoPlataformas", "ContornoInvalido", "EditorFotoProducto", "ErrorFotoProducto", "InvalidImage",
+    "OpcionesEdicion", "Photo", "Plataforma", "PlataformaDesconocida",
     "ProductoNoEncontrado", "ResultadoEdicion", "encode_png", "from_pil", "read_photo", "to_pil",
 ]

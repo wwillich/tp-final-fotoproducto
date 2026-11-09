@@ -57,15 +57,27 @@ def escena(lado: int = 200):
     return img
 
 
-def marcas(lado: int = 200, producto: bool = True, fondo: bool = True):
-    """Marcas de prueba para escena(): verde dentro del cuadrado, rojo en una esquina del fondo."""
+def escena_ruidosa(lado: int = 200, caja: tuple[int, int, int, int] = (60, 140, 60, 140)):
+    """Como escena(), pero con ruido de color: grabCut necesita variación para ajustar sus modelos.
+
+    `caja` = (y0, y1, x0, x1) del producto.
+    """
+    import numpy as np
+
+    azar = np.random.default_rng(0)
+    y0, y1, x0, x1 = caja
+    img = np.full((lado, lado, 3), 200, np.int16)
+    img[y0:y1, x0:x1] = (30, 60, 200)
+    return np.clip(img + azar.integers(-10, 11, img.shape), 0, 255).astype(np.uint8)
+
+
+def contorno(lado: int = 200, caja: tuple[int, int, int, int] = (50, 150, 50, 150)):
+    """Contorno de prueba: zona blanca (algo más grande que el producto) sobre negro."""
     import numpy as np
 
     img = np.zeros((lado, lado, 3), np.uint8)
-    if producto:
-        img[90:110, 90:110] = (0, 255, 0)
-    if fondo:
-        img[5:25, 5:25] = (0, 0, 255)
+    y0, y1, x0, x1 = caja
+    img[y0:y1, x0:x1] = 255
     return img
 
 

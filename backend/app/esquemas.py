@@ -13,8 +13,8 @@ Adaptacion = Literal["bordes", "recortar"]
 Peso = Literal["liviano", "normal", "maxima"]
 
 
-MARCAS_AYUDA = ("Opcional. Imagen PNG con trazos verdes sobre el producto y rojos sobre lo que se quiere sacar "
-                "(el resto, transparente o negro). Si viene, el fondo se reemplaza por blanco.")
+CONTORNO_AYUDA = ("Opcional. Imagen PNG donde lo blanco es la zona que rodea el producto (el resto, transparente "
+                  "o negro). Si viene, el fondo se quita usando esa zona como guía; si no, se detecta solo.")
 
 
 class PlataformaOut(BaseModel):
@@ -47,7 +47,8 @@ def opciones_desde_form(
     posicion_x: float = Form(0.5, ge=0, le=1, description="Al recortar: 0 conserva la izquierda, 1 la derecha."),
     posicion_y: float = Form(0.5, ge=0, le=1, description="Al recortar: 0 conserva la parte de arriba, 1 la de abajo."),
     peso: Peso = Form("normal", description="Peso del archivo: liviano (hasta 200 KB), normal (hasta 500 KB) o maxima calidad."),
+    quitar_fondo: bool = Form(False, description="Dejar el producto sobre fondo blanco."),
 ) -> OpcionesEdicion:
     """Dependencia que arma las opciones de edición a partir de los campos del formulario."""
-    return OpcionesEdicion(plataforma=plataforma, adaptacion=adaptacion,
-                           posicion_x=posicion_x, posicion_y=posicion_y, peso=peso)
+    return OpcionesEdicion(plataforma=plataforma, adaptacion=adaptacion, posicion_x=posicion_x,
+                           posicion_y=posicion_y, peso=peso, quitar_fondo=quitar_fondo)

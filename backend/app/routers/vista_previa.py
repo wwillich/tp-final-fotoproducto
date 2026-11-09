@@ -4,7 +4,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Response, UploadFile
 
 from app.core import procesar_subida
-from app.esquemas import MARCAS_AYUDA, opciones_desde_form
+from app.esquemas import CONTORNO_AYUDA, opciones_desde_form
 from fotoproducto import OpcionesEdicion, ResultadoEdicion
 
 router = APIRouter(prefix="/api", tags=["vista previa"])
@@ -29,8 +29,8 @@ def encabezados(resultado: ResultadoEdicion) -> dict[str, str]:
 )
 async def vista_previa(
     archivo: UploadFile = File(..., description="La foto original."),
-    marcas: UploadFile | None = File(None, description=MARCAS_AYUDA),
+    contorno: UploadFile | None = File(None, description=CONTORNO_AYUDA),
     opciones: OpcionesEdicion = Depends(opciones_desde_form),
 ):
-    _, resultado = await procesar_subida(archivo, opciones, marcas)
+    _, resultado = await procesar_subida(archivo, opciones, contorno)
     return Response(resultado.contenido, media_type=resultado.tipo_mime, headers=encabezados(resultado))

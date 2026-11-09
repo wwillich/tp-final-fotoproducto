@@ -12,7 +12,7 @@ manejadores responden.
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from fotoproducto import ErrorFotoProducto, InvalidImage
+from fotoproducto import ErrorFotoProducto, InvalidImage, PlataformaDesconocida
 
 
 class ApiError(Exception):
@@ -28,6 +28,7 @@ class ApiError(Exception):
 # Excepciones del core → (estado HTTP, código). Las subclases heredan la entrada de su padre.
 CORE_ERRORS: dict[type[ErrorFotoProducto], tuple[int, str]] = {
     InvalidImage: (400, "INVALID_FILE"),
+    PlataformaDesconocida: (422, "PLATAFORMA_DESCONOCIDA"),
     ErrorFotoProducto: (400, "ERROR_FOTOPRODUCTO"),
 }
 

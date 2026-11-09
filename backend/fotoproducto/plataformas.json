@@ -1,0 +1,7 @@
+[
+  {"clave": "mercadolibre", "nombre": "Mercado Libre", "ancho": 1200, "alto": 1200, "formato": "JPEG"},
+  {"clave": "tiendanube", "nombre": "Tienda Nube", "ancho": 1280, "alto": 1280, "formato": "WEBP"},
+  {"clave": "instagram_cuadrada", "nombre": "Instagram (publicación cuadrada)", "ancho": 1080, "alto": 1080, "formato": "JPEG"},
+  {"clave": "instagram_vertical", "nombre": "Instagram (publicación vertical)", "ancho": 1080, "alto": 1350, "formato": "JPEG"},
+  {"clave": "historia_reel", "nombre": "Historia o Reel", "ancho": 1080, "alto": 1920, "formato": "JPEG"}
+]

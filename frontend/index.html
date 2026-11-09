@@ -64,6 +64,7 @@
           <div class="frame frame-paper" id="result-frame">
             <div class="empty">Acá vas a ver el resultado</div>
           </div>
+          <div id="result-avisos" aria-live="polite"></div>
         </figure>
       </div>
     </section>
@@ -73,7 +74,32 @@
       <div class="panel-head">
         <h2 id="opciones-title">Opciones</h2>
       </div>
-      <div class="notice">Las opciones para preparar tu foto van a aparecer acá.</div>
+      <div class="fields">
+        <h3 class="step">¿Dónde vas a publicar?</h3>
+        <div class="field">
+          <label for="plataforma">Plataforma</label>
+          <select id="plataforma"></select>
+          <div class="help">Dejamos la foto con el tamaño y el formato que pide cada una.</div>
+        </div>
+
+        <h3 class="step">Terminación</h3>
+        <div class="field">
+          <label>Si la foto no entra en el formato</label>
+          <div class="segmented" role="group" aria-label="Si la foto no entra en el formato" id="adaptacion">
+            <button type="button" data-value="bordes">Agregar bordes blancos</button>
+            <button type="button" data-value="recortar">Recortar la foto</button>
+          </div>
+          <div class="help" id="adaptacion-help"></div>
+        </div>
+        <div class="field" id="field-posicion" hidden>
+          <label>¿Qué parte mostrar?</label>
+          <input type="range" id="posicion-x" min="0" max="100" step="1" value="50" aria-label="De izquierda a derecha">
+          <div class="range-ends"><span>Izquierda</span><span>Derecha</span></div>
+          <input type="range" id="posicion-y" min="0" max="100" step="1" value="50" aria-label="De arriba a abajo">
+          <div class="range-ends"><span>Arriba</span><span>Abajo</span></div>
+          <div class="help" id="posicion-help"></div>
+        </div>
+      </div>
     </aside>
   </main>
 

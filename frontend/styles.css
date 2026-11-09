@@ -227,6 +227,12 @@ code { font-family: var(--mono); font-size: 12px; }
 /* ---------- Options ---------- */
 
 .fields { display: flex; flex-direction: column; gap: 14px; }
+.range-ends + input[type="range"] { margin-top: 12px; }
+.field input[type="range"]:disabled { opacity: .4; }
+.range-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.step { font-size: 15px; margin-top: 8px; }
+.step:first-child { margin-top: 0; }
+#result-avisos { display: flex; flex-direction: column; gap: 6px; }
 .field label { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 6px; }
 .field .value { font-family: var(--mono); font-weight: 500; color: var(--primary); }
 .field input[type="range"] { width: 100%; accent-color: var(--primary); }

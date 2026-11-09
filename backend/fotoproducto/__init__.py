@@ -6,10 +6,13 @@ NO debe importar FastAPI ni nada de `app`, para poder usarse desde la API, desde
 la línea de comandos (`python -m fotoproducto`) o desde cualquier otro programa.
 """
 
-from fotoproducto.exceptions import ErrorFotoProducto, InvalidImage
+from fotoproducto.editor import EditorFotoProducto, OpcionesEdicion, ResultadoEdicion
+from fotoproducto.exceptions import ErrorFotoProducto, InvalidImage, PlataformaDesconocida
 from fotoproducto.imageio import Photo, encode_png, from_pil, read_photo, to_pil
+from fotoproducto.plataformas import CatalogoPlataformas, Plataforma
 
 __all__ = [
-    "ErrorFotoProducto", "InvalidImage", "Photo",
+    "CatalogoPlataformas", "EditorFotoProducto", "ErrorFotoProducto", "InvalidImage",
+    "OpcionesEdicion", "Photo", "Plataforma", "PlataformaDesconocida", "ResultadoEdicion",
     "encode_png", "from_pil", "read_photo", "to_pil",
 ]

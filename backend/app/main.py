@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import FRONTEND_DIR, MEDIA_URL, STORAGE_DIR
 from app.errors import register_exception_handlers
+from app.routers import plataformas, vista_previa
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Ancho", "X-Alto", "X-Peso-Bytes", "X-Calidad", "X-Avisos"],
 )
 
 
@@ -37,6 +39,9 @@ def health():
 
 # Excepciones de dominio (core y API) → respuestas {"detail": {"code", "message"}}.
 register_exception_handlers(app)
+
+app.include_router(plataformas.router)
+app.include_router(vista_previa.router)
 
 
 # Archivos guardados en disco (originales y resultados).

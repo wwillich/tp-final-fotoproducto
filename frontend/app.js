@@ -23,8 +23,24 @@ const API_BASE = (() => {
 /* Estado                                                                    */
 /* ------------------------------------------------------------------------ */
 
+const ADAPTACIONES = {
+  bordes: "Completa con blanco para que no se corte nada.",
+  recortar: "Corta lo que sobra para llenar todo el formato.",
+};
+// Qué decir debajo de "¿Qué parte mostrar?" según de qué lado sobra foto.
+const AYUDA_POSICION = {
+  horizontal: "Con esta foto y este formato solo se puede mover de izquierda a derecha.",
+  vertical: "Con esta foto y este formato solo se puede mover de arriba a abajo.",
+  ninguno: "Tu foto ya tiene la proporción de este formato: no hay nada para mover.",
+};
+
 const state = {
-  source: null,  // foto cargada: { name, url, width, height }
+  source: null,       // foto cargada: { name, url, file, width, height }
+  plataformas: [],    // GET /api/plataformas
+  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5 },
+  preview: null,      // { url, ancho, alto, peso, avisos } de la última vista previa
+  previewError: null, // ApiError de la última vista previa fallida
+  busy: false,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -76,8 +92,8 @@ function errorTitle(status, code) {
   return `Error ${status}`;
 }
 
-/** Llama a la API y devuelve el JSON; ante un error lanza ApiError con textos en español. */
-async function api(method, path, { formData } = {}) {
+/** Llama a la API y devuelve el JSON (o la respuesta entera con `raw`); ante un error lanza ApiError en español. */
+async function api(method, path, { formData, raw } = {}) {
   let response;
   try {
     response = await fetch(API_BASE + path, { method, body: formData });
@@ -85,6 +101,8 @@ async function api(method, path, { formData } = {}) {
     const msg = `No se pudo conectar con ${API_BASE || location.origin}. ¿Está encendido el servidor?`;
     throw new ApiError(0, null, errorTitle(0), msg);
   }
+
+  if (response.ok && raw) return response;
 
   const text = await response.text();
   let body = null;
@@ -160,9 +178,15 @@ function uploadFile(file) {
     toast("err", "Archivo demasiado grande", "El máximo es 10 MB.");
     return;
   }
-  setSource({ name: file.name, url: URL.createObjectURL(file) });
+  setSource({ name: file.name, url: URL.createObjectURL(file), file });
+  previewSeq++;  // la respuesta pendiente (si la hay) era de la foto anterior
+  state.busy = false;
+  setPreview(null, null);
   renderPhoto();
+  renderOptions();
+  renderResult();
   measureSource();
+  schedulePreview(0);
 }
 
 /** Mide la foto cargada; el navegador ya aplica la orientación EXIF al mostrarla. */
@@ -174,8 +198,65 @@ function measureSource() {
     source.width = img.naturalWidth;
     source.height = img.naturalHeight;
     renderPhoto();
+    renderOptions();  // el eje de recorte depende de las medidas de la foto
   };
   img.src = source.url;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Vista previa                                                              */
+/* ------------------------------------------------------------------------ */
+
+let previewTimer = null;
+let previewSeq = 0;  // descarta respuestas viejas si el usuario cambió algo mientras esperaba
+
+function setPreview(preview, error) {
+  if (state.preview) URL.revokeObjectURL(state.preview.url);
+  state.preview = preview;
+  state.previewError = error;
+}
+
+/** Pide la vista previa con un pequeño retardo, para no saturar al servidor mientras se cambian opciones. */
+function schedulePreview(delay = 300) {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(runPreview, delay);
+}
+
+async function runPreview() {
+  const source = state.source;
+  const o = state.options;
+  if (!source || !o.plataforma) return;
+
+  const seq = ++previewSeq;
+  const fd = new FormData();
+  fd.append("archivo", source.file, source.name);
+  fd.append("plataforma", o.plataforma);
+  fd.append("adaptacion", o.adaptacion);
+  fd.append("posicion_x", o.posicion_x);
+  fd.append("posicion_y", o.posicion_y);
+
+  state.busy = true;
+  renderResult();
+  try {
+    const r = await api("POST", "/api/vista-previa", { formData: fd, raw: true });
+    const blob = await r.blob();
+    if (seq !== previewSeq) return;
+    setPreview({
+      url: URL.createObjectURL(blob),
+      ancho: Number(r.headers.get("X-Ancho")),
+      alto: Number(r.headers.get("X-Alto")),
+      peso: Number(r.headers.get("X-Peso-Bytes")),
+      avisos: JSON.parse(decodeURIComponent(r.headers.get("X-Avisos") || "[]")),
+    }, null);
+  } catch (err) {
+    if (seq !== previewSeq) return;
+    setPreview(null, err);
+  } finally {
+    if (seq === previewSeq) {
+      state.busy = false;
+      renderResult();
+    }
+  }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -193,6 +274,75 @@ function renderPhoto() {
     : el("div", { class: "empty" }, "Subí una foto para empezar"));
 }
 
+const formatBytes = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+
+function renderResult() {
+  const frame = $("#result-frame");
+  const { preview, previewError: error } = state;
+  frame.classList.toggle("loading", state.busy);
+  $("#result-meta").textContent = preview
+    ? `${preview.ancho} × ${preview.alto} · ${formatBytes(preview.peso)}`
+    : "";
+  $("#result-avisos").replaceChildren(
+    ...(preview?.avisos ?? []).map((texto) => el("div", { class: "notice notice-warn" }, texto)));
+
+  if (error) {
+    frame.replaceChildren(el("div", { class: "problem", role: "alert" },
+      el("strong", {}, error.title), el("p", {}, error.message)));
+  } else if (preview) {
+    frame.replaceChildren(el("img", { src: preview.url, alt: "Cómo va a quedar tu foto" }));
+  } else if (!state.busy) {
+    frame.replaceChildren(el("div", { class: "empty" },
+      state.source ? "Preparando la vista previa…" : "Acá vas a ver el resultado"));
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Opciones                                                                  */
+/* ------------------------------------------------------------------------ */
+
+/** Hacia dónde sobra foto respecto del formato elegido: "horizontal", "vertical" o null si ya coincide. */
+function ejeRecorte() {
+  const { source } = state;
+  const p = state.plataformas.find((x) => x.clave === state.options.plataforma);
+  if (!source?.width || !p) return null;
+  const foto = source.width / source.height;
+  const destino = p.ancho / p.alto;
+  if (Math.abs(foto - destino) < 0.005) return null;
+  return foto > destino ? "horizontal" : "vertical";
+}
+
+function renderOptions() {
+  const o = state.options;
+  if (o.plataforma) $("#plataforma").value = o.plataforma;
+  for (const b of document.querySelectorAll("#adaptacion button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.value === o.adaptacion));
+  }
+  $("#adaptacion-help").textContent = ADAPTACIONES[o.adaptacion];
+
+  const eje = ejeRecorte();
+  $("#field-posicion").hidden = o.adaptacion !== "recortar";
+  // Siempre se muestran los dos, pero solo tiene efecto el del eje donde sobra foto.
+  $("#posicion-x").disabled = eje !== "horizontal";
+  $("#posicion-y").disabled = eje !== "vertical";
+  $("#posicion-x").value = Math.round(o.posicion_x * 100);
+  $("#posicion-y").value = Math.round(o.posicion_y * 100);
+  $("#posicion-help").textContent = AYUDA_POSICION[eje ?? "ninguno"];
+}
+
+async function loadPlataformas() {
+  try {
+    state.plataformas = await api("GET", "/api/plataformas");
+  } catch (err) {
+    toastError(err);
+    return;
+  }
+  $("#plataforma").replaceChildren(...state.plataformas.map((p) => el("option", { value: p.clave }, p.nombre)));
+  state.options.plataforma = state.plataformas[0]?.clave ?? null;
+  renderOptions();
+  schedulePreview(0);
+}
+
 /* ------------------------------------------------------------------------ */
 /* Eventos                                                                   */
 /* ------------------------------------------------------------------------ */
@@ -207,13 +357,34 @@ function bindEvents() {
   ["dragenter", "dragover"].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach((t) => zone.addEventListener(t, () => zone.classList.remove("dragging")));
   zone.addEventListener("drop", (e) => { e.preventDefault(); uploadFile(e.dataTransfer.files[0]); });
+
+  $("#plataforma").addEventListener("change", (e) => {
+    state.options.plataforma = e.target.value;
+    renderOptions();
+    schedulePreview();
+  });
+  for (const eje of ["x", "y"]) {
+    $(`#posicion-${eje}`).addEventListener("input", (e) => {
+      state.options[`posicion_${eje}`] = Number(e.target.value) / 100;
+      schedulePreview();
+    });
+  }
+  for (const b of document.querySelectorAll("#adaptacion button")) {
+    b.addEventListener("click", () => {
+      state.options.adaptacion = b.dataset.value;
+      renderOptions();
+      schedulePreview();
+    });
+  }
 }
 
 function init() {
   $("#link-docs").href = (API_BASE || "") + "/docs";
   renderPhoto();
+  renderOptions();
   bindEvents();
   checkServer();
+  loadPlataformas();
 }
 
 init();

@@ -13,3 +13,7 @@ class ErrorFotoProducto(Exception):
 
 class InvalidImage(ErrorFotoProducto):
     """Los bytes no se pueden abrir como imagen (vacío, dañado, no es una imagen)."""
+
+
+class PlataformaDesconocida(ErrorFotoProducto):
+    """La clave de plataforma pedida no está en el catálogo."""

@@ -52,8 +52,13 @@ def opciones_desde_form(
     quitar_fondo: bool = Form(False, description="Dejar el producto sobre fondo blanco."),
     centrar: bool = Form(False, description="Centrar el producto en la foto (con o sin quitar el fondo)."),
     espacio: Espacio = Form("normal", description="Espacio alrededor del producto al centrarlo."),
+    brillo: float = Form(0, ge=-100, le=100, description="De -100 (más oscuro) a 100 (más claro). 0 no cambia nada."),
+    contraste: float = Form(0, ge=-100, le=100, description="De -100 (más apagado) a 100 (más marcado). 0 no cambia nada."),
+    aclarar_oscuras: float = Form(0, ge=0, le=1, description="Cuánto aclarar las zonas oscuras, de 0 (nada) a 1 (mucho)."),
+    colores_naturales: bool = Form(False, description="Corrige el tono amarillento o azulado de la luz."),
 ) -> OpcionesEdicion:
     """Dependencia que arma las opciones de edición a partir de los campos del formulario."""
     return OpcionesEdicion(plataforma=plataforma, adaptacion=adaptacion, posicion_x=posicion_x,
                            posicion_y=posicion_y, peso=peso, quitar_fondo=quitar_fondo,
-                           centrar=centrar, espacio=espacio)
+                           centrar=centrar, espacio=espacio, brillo=brillo, contraste=contraste,
+                           aclarar_oscuras=aclarar_oscuras, colores_naturales=colores_naturales)

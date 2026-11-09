@@ -10,12 +10,17 @@ from fotoproducto.exceptions import ErrorFotoProducto
 from fotoproducto.imageio import read_photo
 
 
-def fraccion(texto: str) -> float:
-    """Tipo de argparse: número entre 0 y 1."""
-    valor = float(texto)
-    if not 0 <= valor <= 1:
-        raise argparse.ArgumentTypeError("tiene que estar entre 0 y 1")
-    return valor
+def numero(minimo: float, maximo: float):
+    """Tipo de argparse: número entre `minimo` y `maximo`."""
+    def convertir(texto: str) -> float:
+        valor = float(texto)
+        if not minimo <= valor <= maximo:
+            raise argparse.ArgumentTypeError(f"tiene que estar entre {minimo:g} y {maximo:g}")
+        return valor
+    return convertir
+
+
+fraccion = numero(0, 1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,6 +46,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="centra el producto en la foto (con o sin --quitar-fondo)")
     parser.add_argument("--espacio", choices=list(ESPACIOS), default="normal",
                         help="espacio alrededor del producto al centrarlo (por defecto: normal)")
+    parser.add_argument("--brillo", type=numero(-100, 100), default=0, help="de -100 (más oscuro) a 100 (más claro)")
+    parser.add_argument("--contraste", type=numero(-100, 100), default=0,
+                        help="de -100 (más apagado) a 100 (más marcado)")
+    parser.add_argument("--aclarar-oscuras", type=numero(0, 1), default=0,
+                        help="aclara las zonas oscuras, de 0 (nada) a 1 (mucho)")
+    parser.add_argument("--colores-naturales", action="store_true",
+                        help="corrige el tono amarillento o azulado de la luz")
     args = parser.parse_args(argv)
 
     try:
@@ -48,7 +60,9 @@ def main(argv: list[str] | None = None) -> int:
         contorno = read_photo(Path(args.contorno).read_bytes()).image if args.contorno else None
         opciones = OpcionesEdicion(plataforma=args.plataforma, adaptacion=args.adaptacion,
                                    posicion_x=args.posicion_x, posicion_y=args.posicion_y, peso=args.peso,
-                                   quitar_fondo=args.quitar_fondo, centrar=args.centrar, espacio=args.espacio)
+                                   quitar_fondo=args.quitar_fondo, centrar=args.centrar, espacio=args.espacio,
+                                   brillo=args.brillo, contraste=args.contraste,
+                                   aclarar_oscuras=args.aclarar_oscuras, colores_naturales=args.colores_naturales)
         resultado = editor.procesar(foto.image, opciones, contorno)
         Path(args.salida).write_bytes(resultado.contenido)
     except (ErrorFotoProducto, OSError) as exc:

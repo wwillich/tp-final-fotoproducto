@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from fotoproducto.ajustes import Ajuste, AclararZonasOscuras, BrilloContraste, ColoresNaturales
 from fotoproducto.compresion import Compresor
 from fotoproducto.encuadre import ADAPTADORES, ESPACIOS, Centrador
 from fotoproducto.fondo import ComponedorFondoBlanco, QuitadorFondo
@@ -23,6 +24,10 @@ class OpcionesEdicion:
     quitar_fondo: bool = False  # dejar el producto sobre fondo blanco
     centrar: bool = False       # centrar el producto (con o sin quitar el fondo)
     espacio: str = "normal"     # espacio alrededor al centrar: clave de ESPACIOS
+    brillo: float = 0           # de -100 (más oscuro) a 100 (más claro)
+    contraste: float = 0        # de -100 (más apagado) a 100 (más marcado)
+    aclarar_oscuras: float = 0  # de 0 (nada) a 1 (mucho)
+    colores_naturales: bool = False  # corrige el tono amarillento o azulado de la luz
 
 
 @dataclass
@@ -54,6 +59,15 @@ class EditorFotoProducto:
         self.quitador = quitador or QuitadorFondo()
         self.componedor = componedor or ComponedorFondoBlanco()
 
+    @staticmethod
+    def ajustes(opciones: OpcionesEdicion) -> list[Ajuste]:
+        """Los ajustes de luz y color en el orden en que se aplican: primero el color, después la luz."""
+        return [
+            ColoresNaturales(opciones.colores_naturales),
+            AclararZonasOscuras(opciones.aclarar_oscuras),
+            BrilloContraste(opciones.brillo, opciones.contraste),
+        ]
+
     def procesar(self, imagen: np.ndarray, opciones: OpcionesEdicion,
                  contorno: np.ndarray | None = None) -> ResultadoEdicion:
         """Quita el fondo (si se pidió), adapta a la proporción de la plataforma, cambia al
@@ -65,9 +79,17 @@ class EditorFotoProducto:
         plataforma = self.catalogo.obtener(opciones.plataforma)
         adaptador = ADAPTADORES[opciones.adaptacion](opciones.posicion_x, opciones.posicion_y)
 
+        # La máscara sirve para las dos cosas: saber dónde está el producto (centrar) y qué es fondo (quitarlo).
+        # Se calcula con la foto original, antes de tocar la luz y el color.
+        mascara = None
         if opciones.quitar_fondo or opciones.centrar or contorno is not None:
-            # La máscara sirve para las dos cosas: saber dónde está el producto (centrar) y qué es fondo (quitarlo).
             mascara = self.quitador.mascara(imagen, contorno)
+
+        # Luz y color van antes del fondo blanco: así el blanco no se tiñe ni se agrisa.
+        for ajuste in self.ajustes(opciones):
+            imagen = ajuste.aplicar(imagen)
+
+        if mascara is not None:
             # Un contorno solo, sin pedir nada más, quita el fondo; si se pidió centrar, solo centra.
             if opciones.quitar_fondo or not opciones.centrar:
                 imagen = self.componedor.componer(imagen, mascara)

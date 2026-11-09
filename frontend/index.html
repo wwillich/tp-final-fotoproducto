@@ -97,6 +97,31 @@
           </div>
         </div>
 
+        <h3 class="step">Luz y color <span class="optional">(opcional)</span></h3>
+        <div class="field">
+          <label for="brillo">Brillo</label>
+          <input type="range" id="brillo" min="-100" max="100" step="1" value="0">
+          <div class="range-ends"><span>Más oscuro</span><span>Más claro</span></div>
+        </div>
+        <div class="field">
+          <label for="contraste">Contraste</label>
+          <input type="range" id="contraste" min="-100" max="100" step="1" value="0">
+          <div class="range-ends"><span>Más suave</span><span>Más marcado</span></div>
+        </div>
+        <div class="field">
+          <label for="aclarar-oscuras">Aclarar zonas oscuras</label>
+          <input type="range" id="aclarar-oscuras" min="0" max="100" step="1" value="0">
+          <div class="range-ends"><span>Nada</span><span>Mucho</span></div>
+          <div class="help">Muestra el detalle de las sombras sin quemar lo que ya está claro.</div>
+        </div>
+        <div class="field field-check">
+          <label for="colores-naturales"><input type="checkbox" id="colores-naturales"> Colores naturales</label>
+          <div class="help">Corrige el tono amarillento o azulado de la luz.</div>
+        </div>
+        <div class="marcas-acciones">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-restablecer-luz">Restablecer luz y color</button>
+        </div>
+
         <h3 class="step">¿Dónde vas a publicar?</h3>
         <div class="field">
           <label for="plataforma">Plataforma</label>

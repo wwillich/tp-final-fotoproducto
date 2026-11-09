@@ -42,7 +42,8 @@ const AYUDA_POSICION = {
 const state = {
   source: null,       // foto cargada: { name, url, file, width, height }
   plataformas: [],    // GET /api/plataformas
-  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal", quitar_fondo: false, centrar: false, espacio: "normal" },
+  options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal", quitar_fondo: false, centrar: false, espacio: "normal",
+    brillo: 0, contraste: 0, aclarar_oscuras: 0, colores_naturales: false },
   contorno: [],       // línea dibujada alrededor del producto: [[x, y], …] en píxeles de la foto (vacío = automático)
   preview: null,      // { url, ancho, alto, peso, calidad, avisos } de la última vista previa
   previewError: null, // ApiError de la última vista previa fallida
@@ -255,8 +256,8 @@ function schedulePreview(delay = 300) {
 async function buildForm(source, o) {
   const fd = new FormData();
   fd.append("archivo", source.file, source.name);
-  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso", "quitar_fondo", "espacio"]) fd.append(campo, o[campo]);
-  fd.append("centrar", o.centrar);
+  for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso", "quitar_fondo", "espacio",
+    "centrar", "brillo", "contraste", "aclarar_oscuras", "colores_naturales"]) fd.append(campo, o[campo]);
   if (contornoListo() && source.width) fd.append("contorno", await exportarContorno(source), "contorno.png");
   return fd;
 }
@@ -556,6 +557,24 @@ function renderFondo() {
   }
 }
 
+/* Luz y color: los tres deslizadores y la casilla. El de "aclarar" se muestra de 0 a 100 y se manda de 0 a 1. */
+const LUZ_NEUTRA = { brillo: 0, contraste: 0, aclarar_oscuras: 0, colores_naturales: false };
+
+function renderLuz() {
+  const o = state.options;
+  $("#brillo").value = o.brillo;
+  $("#contraste").value = o.contraste;
+  $("#aclarar-oscuras").value = Math.round(o.aclarar_oscuras * 100);
+  $("#colores-naturales").checked = o.colores_naturales;
+  $("#btn-restablecer-luz").disabled = Object.keys(LUZ_NEUTRA).every((k) => o[k] === LUZ_NEUTRA[k]);
+}
+
+function cambiarLuz(cambio) {
+  cambio();
+  renderLuz();
+  schedulePreview();
+}
+
 function cambiarFondo(cambio) {
   cambio();
   const canvas = $("#contorno-canvas");
@@ -638,6 +657,7 @@ function renderOptions() {
   $("#posicion-y").value = Math.round(o.posicion_y * 100);
   $("#posicion-help").textContent = AYUDA_POSICION[eje ?? "ninguno"];
   renderFondo();
+  renderLuz();
 }
 
 async function loadPlataformas() {
@@ -805,6 +825,11 @@ function bindEvents() {
   for (const b of document.querySelectorAll("#espacio button")) {
     b.addEventListener("click", () => cambiarFondo(() => { state.options.espacio = b.dataset.value; }));
   }
+  $("#brillo").addEventListener("input", (e) => cambiarLuz(() => { state.options.brillo = Number(e.target.value); }));
+  $("#contraste").addEventListener("input", (e) => cambiarLuz(() => { state.options.contraste = Number(e.target.value); }));
+  $("#aclarar-oscuras").addEventListener("input", (e) => cambiarLuz(() => { state.options.aclarar_oscuras = Number(e.target.value) / 100; }));
+  $("#colores-naturales").addEventListener("change", (e) => cambiarLuz(() => { state.options.colores_naturales = e.target.checked; }));
+  $("#btn-restablecer-luz").addEventListener("click", () => cambiarLuz(() => Object.assign(state.options, LUZ_NEUTRA)));
   $("#btn-borrar-contorno").addEventListener("click", () => cambiarFondo(() => { state.contorno = []; }));
 }
 

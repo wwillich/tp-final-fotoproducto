@@ -12,6 +12,7 @@ from fotoproducto import OpcionesEdicion
 Adaptacion = Literal["bordes", "recortar"]
 Peso = Literal["liviano", "normal", "maxima"]
 Espacio = Literal["poco", "normal", "mucho"]
+NivelNitidez = Literal["nada", "poco", "mucho"]
 
 
 CONTORNO_AYUDA = ("Opcional. Imagen PNG donde lo blanco es la zona que rodea el producto (el resto, transparente "
@@ -56,9 +57,11 @@ def opciones_desde_form(
     contraste: float = Form(0, ge=-100, le=100, description="De -100 (más apagado) a 100 (más marcado). 0 no cambia nada."),
     aclarar_oscuras: float = Form(0, ge=0, le=1, description="Cuánto aclarar las zonas oscuras, de 0 (nada) a 1 (mucho)."),
     colores_naturales: bool = Form(False, description="Corrige el tono amarillento o azulado de la luz."),
+    nitidez: NivelNitidez = Form("nada", description="Realce de los bordes, aplicado al tamaño final."),
 ) -> OpcionesEdicion:
     """Dependencia que arma las opciones de edición a partir de los campos del formulario."""
     return OpcionesEdicion(plataforma=plataforma, adaptacion=adaptacion, posicion_x=posicion_x,
                            posicion_y=posicion_y, peso=peso, quitar_fondo=quitar_fondo,
                            centrar=centrar, espacio=espacio, brillo=brillo, contraste=contraste,
-                           aclarar_oscuras=aclarar_oscuras, colores_naturales=colores_naturales)
+                           aclarar_oscuras=aclarar_oscuras, colores_naturales=colores_naturales,
+                           nitidez=nitidez)

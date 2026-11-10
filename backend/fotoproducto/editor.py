@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from fotoproducto.ajustes import Ajuste, AclararZonasOscuras, BrilloContraste, ColoresNaturales
+from fotoproducto.ajustes import (
+    Ajuste, AclararZonasOscuras, BrilloContraste, ColoresNaturales, NIVELES_NITIDEZ, Nitidez,
+)
 from fotoproducto.compresion import Compresor
 from fotoproducto.encuadre import ADAPTADORES, ESPACIOS, Centrador
 from fotoproducto.fondo import ComponedorFondoBlanco, QuitadorFondo
@@ -28,6 +30,7 @@ class OpcionesEdicion:
     contraste: float = 0        # de -100 (más apagado) a 100 (más marcado)
     aclarar_oscuras: float = 0  # de 0 (nada) a 1 (mucho)
     colores_naturales: bool = False  # corrige el tono amarillento o azulado de la luz
+    nitidez: str = "nada"       # clave de NIVELES_NITIDEZ; se aplica después de cambiar el tamaño
 
 
 @dataclass
@@ -98,6 +101,8 @@ class EditorFotoProducto:
 
         imagen = adaptador.adaptar(imagen, plataforma.ancho, plataforma.alto)
         imagen, amplio = self.redimensionador.redimensionar(imagen, plataforma.ancho, plataforma.alto)
+        # La nitidez va después de cambiar el tamaño: reducir es lo que le quita nitidez a la foto.
+        imagen = Nitidez(NIVELES_NITIDEZ[opciones.nitidez]).aplicar(imagen)
 
         avisos = []
         if amplio:

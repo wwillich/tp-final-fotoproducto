@@ -4,6 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from fotoproducto.ajustes import NIVELES_NITIDEZ
 from fotoproducto.editor import EditorFotoProducto, OpcionesEdicion
 from fotoproducto.encuadre import ADAPTADORES, ESPACIOS
 from fotoproducto.exceptions import ErrorFotoProducto
@@ -53,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="aclara las zonas oscuras, de 0 (nada) a 1 (mucho)")
     parser.add_argument("--colores-naturales", action="store_true",
                         help="corrige el tono amarillento o azulado de la luz")
+    parser.add_argument("--nitidez", choices=list(NIVELES_NITIDEZ), default="nada",
+                        help="realce de los bordes, aplicado al tamaño final (por defecto: nada)")
     args = parser.parse_args(argv)
 
     try:
@@ -62,7 +65,8 @@ def main(argv: list[str] | None = None) -> int:
                                    posicion_x=args.posicion_x, posicion_y=args.posicion_y, peso=args.peso,
                                    quitar_fondo=args.quitar_fondo, centrar=args.centrar, espacio=args.espacio,
                                    brillo=args.brillo, contraste=args.contraste,
-                                   aclarar_oscuras=args.aclarar_oscuras, colores_naturales=args.colores_naturales)
+                                   aclarar_oscuras=args.aclarar_oscuras, colores_naturales=args.colores_naturales,
+                                   nitidez=args.nitidez)
         resultado = editor.procesar(foto.image, opciones, contorno)
         Path(args.salida).write_bytes(resultado.contenido)
     except (ErrorFotoProducto, OSError) as exc:

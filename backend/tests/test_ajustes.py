@@ -1,4 +1,4 @@
-"""Tests de luz y color (F5): cada ajuste, el orden en el editor, la API y la línea de comandos."""
+﻿"""Tests de luz y color (F5): cada ajuste, el orden en el editor, la API y la línea de comandos."""
 
 import os
 import subprocess
@@ -10,7 +10,9 @@ import pytest
 
 from conftest import BACKEND_DIR, contorno, escena_ruidosa, png_bytes
 from fotoproducto import EditorFotoProducto, OpcionesEdicion
-from fotoproducto.ajustes import Ajuste, AclararZonasOscuras, BrilloContraste, ColoresNaturales
+from fotoproducto.ajustes import (
+    Ajuste, AclararZonasOscuras, BrilloContraste, ColoresNaturales, NIVELES_NITIDEZ, Nitidez,
+)
 
 
 def degradado(alto=120, ancho=160):
@@ -27,7 +29,7 @@ def luz(imagen):
 
 # --- Valores neutros --------------------------------------------------------------------
 
-@pytest.mark.parametrize("ajuste", [BrilloContraste(), AclararZonasOscuras(), ColoresNaturales()])
+@pytest.mark.parametrize("ajuste", [BrilloContraste(), AclararZonasOscuras(), ColoresNaturales(), Nitidez()])
 def test_un_ajuste_neutro_no_cambia_la_imagen(ajuste):
     assert isinstance(ajuste, Ajuste)
     imagen = degradado()
@@ -116,7 +118,47 @@ def test_colores_naturales_no_multiplica_sin_limite_una_foto_muy_oscura():
     assert ColoresNaturales(activo=True).aplicar(oscura).max() <= 10   # tope de ganancia = 2
 
 
+# --- Nitidez ----------------------------------------------------------------------------
+
+def borroso():
+    """Un cuadrado claro con el borde suavizado, sobre un fondo oscuro."""
+    img = np.full((200, 200, 3), 60, np.uint8)
+    img[60:140, 60:140] = 190
+    return cv2.GaussianBlur(img, (0, 0), 3)
+
+
+def detalle(imagen):
+    """Cuánto detalle fino hay: varianza del laplaciano."""
+    return cv2.Laplacian(cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
+
+
+def test_nitidez_realza_los_bordes_y_mas_intensidad_realza_mas():
+    imagen = borroso()
+    poco, mucho = (detalle(Nitidez(NIVELES_NITIDEZ[n]).aplicar(imagen)) for n in ("poco", "mucho"))
+    assert detalle(imagen) < poco < mucho
+
+
+def test_nitidez_no_cambia_las_zonas_lisas_ni_el_tamano():
+    imagen = borroso()
+    out = Nitidez(1.0).aplicar(imagen)
+    assert out.shape == imagen.shape and out.dtype == np.uint8
+    assert np.abs(out[100, 100].astype(int) - imagen[100, 100]).max() <= 2     # centro liso del cuadrado
+    assert np.abs(out[5, 5].astype(int) - imagen[5, 5]).max() <= 2             # fondo liso
+
+
+def test_nitidez_nada_es_neutra():
+    assert NIVELES_NITIDEZ["nada"] == 0
+
+
 # --- Editor -----------------------------------------------------------------------------
+
+def test_el_editor_aplica_la_nitidez_al_tamano_final():
+    editor = EditorFotoProducto()
+    imagen = borroso()
+    sin = decodificar(editor.procesar(imagen, OpcionesEdicion("mercadolibre", peso="maxima")).contenido)
+    con = decodificar(editor.procesar(imagen, OpcionesEdicion("mercadolibre", peso="maxima", nitidez="mucho")).contenido)
+    assert sin.shape == con.shape == (1200, 1200, 3)
+    assert detalle(con) > detalle(sin) * 1.5
 
 def decodificar(contenido: bytes) -> np.ndarray:
     return cv2.imdecode(np.frombuffer(contenido, np.uint8), cv2.IMREAD_COLOR)
@@ -162,6 +204,21 @@ def test_api_aplica_brillo(client):
     assert luz(claro).mean() > luz(base).mean() + 20
 
 
+def test_api_nitidez(client):
+    sin = vista_previa(client)
+    con = vista_previa(client, nitidez="mucho")
+    assert sin.status_code == con.status_code == 200 and sin.content != con.content
+    assert vista_previa(client, nitidez="extrema").status_code == 422
+
+
+def test_el_contrato_de_nitidez_coincide_con_el_core():
+    from typing import get_args
+
+    from app.esquemas import NivelNitidez
+
+    assert set(get_args(NivelNitidez)) == set(NIVELES_NITIDEZ)
+
+
 def test_api_acepta_todos_los_ajustes(client):
     r = vista_previa(client, brillo="-20", contraste="20", aclarar_oscuras="0.5", colores_naturales="true")
     assert r.status_code == 200
@@ -185,8 +242,10 @@ def test_cli_ajustes(tmp_path):
     entrada, salida = tmp_path / "in.png", tmp_path / "out.jpg"
     entrada.write_bytes(png_bytes(degradado()))
     r = correr(entrada, salida, "--plataforma", "mercadolibre", "--brillo", "30", "--contraste", "-10",
-               "--aclarar-oscuras", "0.5", "--colores-naturales")
+               "--aclarar-oscuras", "0.5", "--colores-naturales", "--nitidez", "poco")
     assert r.returncode == 0, r.stderr
+    r = correr(entrada, salida, "--plataforma", "mercadolibre", "--nitidez", "extrema")
+    assert r.returncode != 0 and "invalid choice" in r.stderr
 
 
 def test_cli_rechaza_ajustes_fuera_de_rango(tmp_path):

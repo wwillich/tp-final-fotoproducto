@@ -43,7 +43,7 @@ const state = {
   source: null,       // foto cargada: { name, url, file, width, height }
   plataformas: [],    // GET /api/plataformas
   options: { plataforma: null, adaptacion: "bordes", posicion_x: 0.5, posicion_y: 0.5, peso: "normal", quitar_fondo: false, centrar: false, espacio: "normal",
-    brillo: 0, contraste: 0, aclarar_oscuras: 0, colores_naturales: false },
+    brillo: 0, contraste: 0, aclarar_oscuras: 0, colores_naturales: false, nitidez: "nada" },
   contorno: [],       // línea dibujada alrededor del producto: [[x, y], …] en píxeles de la foto (vacío = automático)
   preview: null,      // { url, ancho, alto, peso, calidad, avisos } de la última vista previa
   previewError: null, // ApiError de la última vista previa fallida
@@ -257,7 +257,7 @@ async function buildForm(source, o) {
   const fd = new FormData();
   fd.append("archivo", source.file, source.name);
   for (const campo of ["plataforma", "adaptacion", "posicion_x", "posicion_y", "peso", "quitar_fondo", "espacio",
-    "centrar", "brillo", "contraste", "aclarar_oscuras", "colores_naturales"]) fd.append(campo, o[campo]);
+    "centrar", "brillo", "contraste", "aclarar_oscuras", "colores_naturales", "nitidez"]) fd.append(campo, o[campo]);
   if (contornoListo() && source.width) fd.append("contorno", await exportarContorno(source), "contorno.png");
   return fd;
 }
@@ -646,6 +646,9 @@ function renderOptions() {
   for (const b of document.querySelectorAll("#peso button")) {
     b.setAttribute("aria-pressed", String(b.dataset.value === o.peso));
   }
+  for (const b of document.querySelectorAll("#nitidez button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.value === o.nitidez));
+  }
   $("#peso-help").textContent = PESOS[o.peso];
 
   const eje = ejeRecorte();
@@ -809,7 +812,7 @@ function bindEvents() {
       schedulePreview();
     });
   }
-  for (const campo of ["adaptacion", "peso"]) {
+  for (const campo of ["adaptacion", "nitidez", "peso"]) {
     for (const b of document.querySelectorAll(`#${campo} button`)) {
       b.addEventListener("click", () => {
         state.options[campo] = b.dataset.value;

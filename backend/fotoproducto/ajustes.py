@@ -82,3 +82,26 @@ class ColoresNaturales(Ajuste):
             ganancia = min(255 / casi_maximo, self.ganancia_maxima)
             canales.append(np.clip(np.rint(canal.astype(np.float32) * ganancia), 0, 255).astype(np.uint8))
         return cv2.merge(canales)
+
+
+# Cuánto realzar el borde en cada nivel de nitidez (la fuerza del filtro de máscara de enfoque).
+NIVELES_NITIDEZ: dict[str, float] = {"nada": 0.0, "poco": 0.5, "mucho": 1.5}
+
+
+class Nitidez(Ajuste):
+    """Máscara de enfoque: resta una versión desenfocada para realzar los bordes.
+
+    g = (1 + a)·f − a·desenfoque(f), con `a` = `intensidad` (0 es neutro). Se aplica al tamaño final,
+    después de reducir, que es cuando la imagen pierde nitidez.
+    """
+
+    def __init__(self, intensidad: float = 0, sigma_relativo: float = 0.002) -> None:
+        self.intensidad = max(0.0, intensidad)
+        self.sigma_relativo = sigma_relativo  # radio del desenfoque como fracción del lado mayor
+
+    def aplicar(self, imagen: np.ndarray) -> np.ndarray:
+        if self.intensidad == 0:
+            return imagen
+        sigma = max(0.8, self.sigma_relativo * max(imagen.shape[:2]))
+        desenfocada = cv2.GaussianBlur(imagen, (0, 0), sigma)
+        return cv2.addWeighted(imagen, 1 + self.intensidad, desenfocada, -self.intensidad, 0)

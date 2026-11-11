@@ -1,3 +1,5 @@
+"""Vista previa: procesa la foto y devuelve la imagen, sin guardar nada."""
+
 import json
 from urllib.parse import quote
 
@@ -31,6 +33,7 @@ async def vista_previa(
     archivo: UploadFile = File(..., description="La foto original."),
     contorno: UploadFile | None = File(None, description=CONTORNO_AYUDA),
     opciones: OpcionesEdicion = Depends(opciones_desde_form),
-):
+) -> Response:
+    """Devuelve la foto procesada; el tamaño, el peso y la calidad van en los encabezados."""
     _, resultado = await procesar_subida(archivo, opciones, contorno)
     return Response(resultado.contenido, media_type=resultado.tipo_mime, headers=encabezados(resultado))

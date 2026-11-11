@@ -1,6 +1,9 @@
-from contextlib import asynccontextmanager
+"""Aplicación FastAPI: monta la API, los archivos guardados y el frontend."""
 
-from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Awaitable, Callable
+
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -10,7 +13,8 @@ from app.routers import plataformas, trabajos, vista_previa
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Al arrancar, se asegura de que exista la carpeta donde se guardan los trabajos."""
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     yield
 
@@ -33,7 +37,7 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def revalidar_frontend(request: Request, call_next):
+async def revalidar_frontend(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     """Los archivos del frontend se revalidan en cada carga (ETag): así el navegador no muestra un CSS o JS viejo."""
     response = await call_next(request)
     if not request.url.path.startswith(("/api", MEDIA_URL)):
@@ -42,7 +46,8 @@ async def revalidar_frontend(request: Request, call_next):
 
 
 @app.get("/api/health", tags=["sistema"], summary="Estado del servidor")
-def health():
+def health() -> dict[str, str]:
+    """Responde si el servidor está andando."""
     return {"status": "ok"}
 
 

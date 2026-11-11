@@ -28,6 +28,7 @@ class BrilloContraste(Ajuste):
         self.contraste = contraste
 
     def aplicar(self, imagen: np.ndarray) -> np.ndarray:
+        """Cambia el brillo y el contraste."""
         if self.brillo == 0 and self.contraste == 0:
             return imagen
         alfa = max(0.0, 1 + self.contraste / 100)
@@ -48,6 +49,7 @@ class AclararZonasOscuras(Ajuste):
         self.grilla = grilla                      # la imagen se divide en grilla × grilla zonas
 
     def aplicar(self, imagen: np.ndarray) -> np.ndarray:
+        """Aclara las sombras según la intensidad."""
         if self.intensidad == 0:
             return imagen
         luz, a, b = cv2.split(cv2.cvtColor(imagen, cv2.COLOR_BGR2LAB))
@@ -69,9 +71,10 @@ class ColoresNaturales(Ajuste):
     def __init__(self, activo: bool = False, percentil: float = 0.99, ganancia_maxima: float = 2.0) -> None:
         self.activo = activo
         self.percentil = percentil              # fracción de píxeles que queda por debajo del "casi máximo"
-        self.ganancia_maxima = ganancia_maxima  # tope del estiramiento, para no multiplicar el ruido de una foto muy oscura
+        self.ganancia_maxima = ganancia_maxima  # tope del estiramiento (no multiplica el ruido de fotos oscuras)
 
     def aplicar(self, imagen: np.ndarray) -> np.ndarray:
+        """Estira cada canal para quitar la dominante de color."""
         if not self.activo:
             return imagen
         canales = []
@@ -100,6 +103,7 @@ class Nitidez(Ajuste):
         self.sigma_relativo = sigma_relativo  # radio del desenfoque como fracción del lado mayor
 
     def aplicar(self, imagen: np.ndarray) -> np.ndarray:
+        """Realza los bordes con la máscara de enfoque."""
         if self.intensidad == 0:
             return imagen
         sigma = max(0.8, self.sigma_relativo * max(imagen.shape[:2]))

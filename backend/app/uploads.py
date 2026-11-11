@@ -19,12 +19,15 @@ from fotoproducto import Photo, read_photo
 
 @dataclass(frozen=True)
 class Upload:
-    name: str        # nombre que mandó el usuario (nunca usarlo para nombrar un archivo en disco)
+    """Una foto ya validada: el archivo recibido y la imagen lista para el core."""
+
+    name: str       # nombre que mandó el usuario (nunca usarlo para nombrar un archivo en disco)
     content: bytes   # el archivo tal como se recibió
     photo: Photo     # formato + imagen BGR derecha, lista para el core
 
 
 async def read_upload(file: UploadFile) -> Upload:
+    """Lee y valida la foto subida; lanza ApiError si es muy grande o de un formato no soportado."""
     # Lee a lo sumo un byte más que el límite, para no cargar entero un archivo enorme.
     content = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:

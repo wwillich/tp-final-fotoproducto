@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Foto de producto (frontend)
  *
  * Dónde busca la API:

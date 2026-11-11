@@ -1,4 +1,4 @@
-﻿"""Quitar el fondo: grabCut a partir de un contorno (automático o dibujado) y la foto sobre fondo blanco."""
+"""Quitar el fondo: grabCut a partir de un contorno (automático o dibujado) y la foto sobre fondo blanco."""
 
 import cv2
 import numpy as np
@@ -37,7 +37,7 @@ class QuitadorFondo:
         self.suavizado_borde = suavizado_borde  # desenfoque que redondea el borde, fracción del lado mayor
         self.banda_contorno = banda_contorno    # banda dudosa cuando el usuario dibujó el contorno
         self.fraccion_nucleo_contorno = fraccion_nucleo_contorno  # núcleo seguro cuando hay contorno del usuario
-        self.cierre_borde = cierre_borde        # tamaño de las muescas del borde que se rellenan, fracción del lado mayor
+        self.cierre_borde = cierre_borde        # muescas del borde que se rellenan, fracción del lado mayor
 
     def mascara(self, imagen: np.ndarray, contorno: np.ndarray | None = None) -> np.ndarray:
         """Máscara uint8 (255 = producto, 0 = fondo) del tamaño de la imagen.
@@ -78,7 +78,8 @@ class QuitadorFondo:
         interior = np.where(contorno > 127, 255, 0).astype(np.uint8)
         cantidad = np.count_nonzero(interior)
         if cantidad == 0 or cantidad == interior.size:
-            raise ContornoInvalido("El contorno no encierra ninguna zona de la foto. Dibujalo de nuevo rodeando el producto.")
+            raise ContornoInvalido(
+                "El contorno no encierra ninguna zona de la foto. Dibujalo de nuevo rodeando el producto.")
         return interior
 
     def _grabcut(self, imagen: np.ndarray, interior: np.ndarray, guiado: bool) -> np.ndarray:

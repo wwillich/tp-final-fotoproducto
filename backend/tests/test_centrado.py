@@ -1,4 +1,4 @@
-﻿"""Tests de centrar el producto (F4): Centrador, editor, API y línea de comandos."""
+"""Tests de centrar el producto (F4): Centrador, editor, API y línea de comandos."""
 
 import cv2
 import numpy as np

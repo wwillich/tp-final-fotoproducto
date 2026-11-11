@@ -45,16 +45,20 @@ CORE_ERRORS: dict[type[ErrorFotoProducto], tuple[int, str]] = {
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:
+    """Arma la respuesta de error con el formato común de la API."""
     return JSONResponse(status_code=status, content={"detail": {"code": code, "message": message}})
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    """Registra en la app los manejadores que convierten las excepciones en respuestas HTTP."""
     @app.exception_handler(ApiError)
     async def handle_api_error(request: Request, exc: ApiError) -> JSONResponse:
+        """Errores de la API misma: usan su propio estado y código."""
         return error_response(exc.status, exc.code, exc.message)
 
     @app.exception_handler(ErrorFotoProducto)
     async def handle_core_error(request: Request, exc: ErrorFotoProducto) -> JSONResponse:
+        """Errores del core: se busca su tipo (o el de un ancestro) en CORE_ERRORS."""
         for exc_type in type(exc).__mro__:
             if exc_type in CORE_ERRORS:
                 status, code = CORE_ERRORS[exc_type]

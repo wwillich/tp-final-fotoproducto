@@ -3,6 +3,7 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Callable
 
 from fotoproducto.ajustes import NIVELES_NITIDEZ
 from fotoproducto.editor import EditorFotoProducto, OpcionesEdicion
@@ -11,9 +12,10 @@ from fotoproducto.exceptions import ErrorFotoProducto
 from fotoproducto.imageio import read_photo
 
 
-def numero(minimo: float, maximo: float):
+def numero(minimo: float, maximo: float) -> Callable[[str], float]:
     """Tipo de argparse: número entre `minimo` y `maximo`."""
     def convertir(texto: str) -> float:
+        """Convierte el texto y verifica que esté dentro del rango."""
         valor = float(texto)
         if not minimo <= valor <= maximo:
             raise argparse.ArgumentTypeError(f"tiene que estar entre {minimo:g} y {maximo:g}")
@@ -38,7 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--posicion-y", type=fraccion, default=0.5,
                         help="al recortar, de 0 (conserva la parte de arriba) a 1 (la de abajo); por defecto 0.5")
     parser.add_argument("--peso", choices=list(editor.compresor.perfiles), default="normal",
-                        help="peso del archivo: liviano (hasta 200 KB), normal (hasta 500 KB) o maxima calidad (por defecto: normal)")
+                        help="peso del archivo: liviano (hasta 200 KB), normal (hasta 500 KB) "
+                             "o maxima calidad (por defecto: normal)")
     parser.add_argument("--quitar-fondo", action="store_true",
                         help="deja el producto sobre fondo blanco (lo detecta solo)")
     parser.add_argument("--contorno", help="imagen con una zona clara que rodea el producto; "

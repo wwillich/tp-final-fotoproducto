@@ -32,18 +32,24 @@ class Codificador(ABC):
 
 
 class CodificadorJPEG(Codificador):
+    """JPEG: con pérdida; la calidad va de 1 a 100."""
+
     extension = ".jpg"
     tipo_mime = "image/jpeg"
 
     def parametros(self, calidad: int) -> list[int]:
+        """Parámetros de cv2.imencode para JPEG."""
         return [cv2.IMWRITE_JPEG_QUALITY, calidad]
 
 
 class CodificadorWebP(Codificador):
+    """WebP: con pérdida; la calidad va de 1 a 100."""
+
     extension = ".webp"
     tipo_mime = "image/webp"
 
     def parametros(self, calidad: int) -> list[int]:
+        """Parámetros de cv2.imencode para WebP."""
         return [cv2.IMWRITE_WEBP_QUALITY, calidad]
 
 
@@ -54,6 +60,7 @@ class CodificadorPNG(Codificador):
     tipo_mime = "image/png"
 
     def parametros(self, calidad: int) -> list[int]:
+        """Parámetros de cv2.imencode para PNG (nivel de compresión de 0 a 9)."""
         return [cv2.IMWRITE_PNG_COMPRESSION, min(9, max(0, round((100 - calidad) * 9 / 100)))]
 
 

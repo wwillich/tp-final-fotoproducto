@@ -1,4 +1,4 @@
-﻿"""Tests de luz y color (F5): cada ajuste, el orden en el editor, la API y la línea de comandos."""
+"""Tests de luz y color (F5): cada ajuste, el orden en el editor, la API y la línea de comandos."""
 
 import os
 import subprocess

@@ -49,6 +49,7 @@ class AgregarBordes(Adaptador):
     """Completa con blanco, centrado, lo que falta para llegar a la proporción."""
 
     def adaptar(self, imagen: np.ndarray, ancho: int, alto: int) -> np.ndarray:
+        """Agrega bordes blancos hasta llegar a la proporción pedida."""
         alto_i, ancho_i = imagen.shape[:2]
         # Una de las dos medidas se mantiene y la otra crece lo necesario.
         nuevo_ancho = max(ancho_i, round(alto_i * ancho / alto))
@@ -72,6 +73,7 @@ class Recortar(Adaptador):
         self.posicion_y = min(max(posicion_y, 0.0), 1.0)
 
     def adaptar(self, imagen: np.ndarray, ancho: int, alto: int) -> np.ndarray:
+        """Recorta lo que sobra hasta llegar a la proporción pedida."""
         alto_i, ancho_i = imagen.shape[:2]
         nuevo_ancho = max(1, min(ancho_i, round(alto_i * ancho / alto)))
         nuevo_alto = max(1, min(alto_i, round(ancho_i * alto / ancho)))

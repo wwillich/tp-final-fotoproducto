@@ -63,5 +63,6 @@ app.include_router(trabajos.router)
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 app.mount(MEDIA_URL, StaticFiles(directory=STORAGE_DIR), name="media")
 
-# Frontend (va al final porque captura "/").
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+# Frontend (va al final porque captura "/"). Si se despliega solo el backend, la carpeta no existe y no se monta.
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

@@ -11,8 +11,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
+# En Vercel el disco es de solo lectura: lo único escribible es /tmp (y se pierde entre invocaciones).
+EN_VERCEL = bool(os.environ.get("VERCEL"))
+STORAGE_POR_DEFECTO = Path("/tmp/storage") if EN_VERCEL else BASE_DIR / "storage"
+
 # Carpeta donde se guardan los trabajos (original, resultado y metadatos).
-STORAGE_DIR = Path(os.environ.get("TP_STORAGE_DIR", BASE_DIR / "storage"))
+STORAGE_DIR = Path(os.environ.get("TP_STORAGE_DIR", STORAGE_POR_DEFECTO))
 
 # URL pública bajo la que se sirve STORAGE_DIR.
 MEDIA_URL = "/media"
